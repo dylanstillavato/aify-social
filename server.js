@@ -23,7 +23,7 @@ const FRONTEND_ORIGINS = (process.env.GOOGLE_FRONTEND_URL || 'http://localhost:5
   .split(',')
   .map(o => o.trim().replace(/\/+$/, ''))
 
-// Aify Pictures (editor gratis en el navegador, repo aify-pictures) llama al
+// @Pictures (editor gratis en el navegador, repo aify-pictures) llama al
 // MCP desde el navegador, así que /mcp acepta también sus orígenes: los de
 // AIFY_PICTURES_ORIGINS (separados por comas, mismo saneado que arriba) o, sin
 // la variable, la web publicada y los puertos de Vite (dev y preview). El CORS
@@ -41,7 +41,7 @@ app.use('/mcp', cors({
   allowedHeaders: ['Authorization', 'Content-Type', 'Accept', 'Mcp-Session-Id', 'Mcp-Protocol-Version'],
   exposedHeaders: ['Mcp-Session-Id'],
 }))
-// Las pizarras de Aify Pictures (/api/pizarras, misma autenticación que el MCP)
+// Las pizarras de @Pictures (/api/pizarras, misma autenticación que el MCP)
 // se leen y se guardan desde Studio, en el navegador: mismos orígenes que /mcp.
 app.use('/api/pizarras', cors({
   origin: ORIGENES_MCP,
@@ -51,7 +51,7 @@ app.use('/api/pizarras', cors({
 // leen los metadatos y piden tokens desde cualquier origen. Va antes del cors
 // global para que el preflight OPTIONS no se quede sin cabeceras.
 app.use(['/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource', '/token', '/register', '/revoke'], cors())
-// La lista de espera de la landing de Aify Pictures (POST /api/pictures/lista-espera)
+// La lista de espera de la landing de @Pictures (POST /api/pictures/lista-espera)
 // solo se llama desde Pictures; va aquí por la misma razón (el preflight).
 app.use('/api/pictures/lista-espera', cors({ origin: ORIGENES_PICTURES }))
 app.use(cors({ origin: FRONTEND_ORIGINS }))
@@ -716,7 +716,7 @@ app.post('/api/palabras-clave', rateLimit, async (req, res) => {
     const claves = await clavesIaDeOrganizacion(organizacionId)
     if (!claves.gemini && !claves.anthropic) {
       return res.status(402).json({
-        error: organizacionId ? MENSAJE_CONECTA_IA : 'Crea tu cuenta gratis de Aify Social y conecta tu IA para buscar palabras clave.',
+        error: organizacionId ? MENSAJE_CONECTA_IA : 'Crea tu cuenta gratis de @Social y conecta tu IA para buscar palabras clave.',
         conectaIa: true,
       })
     }
@@ -856,7 +856,7 @@ app.get('/api/test', (_req, res) => {
 
 app.get('/api/ping', (_req, res) => res.json({ ok: true, timestamp: Date.now() }))
 
-// ── POST /api/pictures/lista-espera — lista de espera de Aify Pictures ────────
+// ── POST /api/pictures/lista-espera — lista de espera de @Pictures ────────
 // Público a propósito: la landing (https://pictures.useaify.app) es estática y
 // no tiene servidor. CORS solo para ORIGENES_PICTURES (arriba), tabla
 // lista_espera_pictures (0052) y un freno de 5 peticiones por minuto por IP.
@@ -1431,7 +1431,7 @@ async function requireTokenOAuth(token, req, res, next) {
   next()
 }
 
-// ── Pizarras de Aify Pictures por REST (0054_pizarras.sql, docs/mcp.md) ──────
+// ── Pizarras de @Pictures por REST (0054_pizarras.sql, docs/mcp.md) ──────
 // Lo mismo que las herramientas de pizarras del MCP (mcp/pizarras.js), para
 // que Studio lea y guarde sin hablar MCP. Misma autenticación que /mcp
 // (requireClaveApi) y mismo formato de respuesta. PUT con actualizada_en solo
