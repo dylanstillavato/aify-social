@@ -1,0 +1,45 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Environment variables
+.env
+.env.local
+
+# Claude Code local session state
+.claude/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+
+# iCloud Drive placeholder stubs (this project sits under an iCloud-synced
+# folder) and stray "filename 2.ext" duplicates from sync conflicts
+*.icloud
+.*.icloud
+* [0-9].js
+* [0-9].jsx
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# design-sync
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules

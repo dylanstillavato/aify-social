@@ -1,0 +1,232 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: 'Super Jello';
+  src: url('./assets/fonts/SuperJello.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #F5F5F7;
+  --bg-card: #FFFFFF;
+  --bg-hover: #F5F5F7;
+  --text-primary: #1D1D1F;
+  --text-secondary: #86868B;
+  --text-tertiary: #C7C7CC;
+  --border-color: #E5E5EA;
+  --border-subtle: #F2F2F7;
+  --accent-blue: #1D5FE0;
+  --accent-blue-hover: #1850BE;
+  --accent-lime: #D7FF3D;
+  /* Brand blue family — replaces all purple tones (#8B5CF6, #5856D6, #7C6CF6, etc.)
+     app-wide per the "Sexy Blue" reference. Purple is being retired entirely. */
+  --gradient-brand: linear-gradient(135deg, #007BFF 0%, #4DA3FF 45%, #B0E0E6 100%);
+  --brand-blue-1: #007BFF;
+  --brand-blue-2: #3D9BFF;
+  --brand-blue-3: #7CC0FF;
+  --brand-blue-4: #B0E0E6;
+  --font-display: 'Super Jello', 'SF Pro Display', sans-serif;
+  --accent-lime-hover: #BEE62A;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+  --sidebar-bg: rgba(255,255,255,0.72);
+  --glass-bg: rgba(255,255,255,0.72);
+  --gradient-bg: linear-gradient(135deg, #F0F4FF 0%, #F5F0FF 100%);
+  --gradient-hero: linear-gradient(135deg, #4F6EF7 0%, #8B5CF6 100%);
+  --gradient-green: linear-gradient(135deg, #10B981 0%, #059669 100%);
+  --gradient-orange: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+  --card-glass: rgba(255,255,255,0.72);
+  --card-glass-border: rgba(255,255,255,0.85);
+  --card-glass-shadow: 0 4px 24px rgba(0,0,0,0.06);
+  --card-radius: 24px;
+  --accent-purple: #8B5CF6;
+  --accent-green: #10B981;
+  --accent-orange: #F59E0B;
+}
+
+[data-theme="dark"] {
+  --bg-primary: #000000;
+  --bg-secondary: #1C1C1E;
+  --bg-card: #2C2C2E;
+  --bg-hover: #3A3A3C;
+  --text-primary: #FFFFFF;
+  --text-secondary: rgba(235,235,245,0.8);
+  --text-tertiary: rgba(235,235,245,0.38);
+  --border-color: #38383A;
+  --border-subtle: #2C2C2E;
+  --accent-blue: #4C93FF;
+  --accent-blue-hover: #6BA6FF;
+  --accent-lime: #D7FF3D;
+  --accent-lime-hover: #BEE62A;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.3);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.4);
+  --sidebar-bg: rgba(28,28,30,0.85);
+  --glass-bg: rgba(28,28,30,0.85);
+  --gradient-bg: linear-gradient(135deg, #0A0A0F 0%, #0F0A1A 100%);
+  --card-glass: rgba(255,255,255,0.04);
+  --card-glass-border: rgba(255,255,255,0.08);
+  --card-glass-shadow: 0 4px 24px rgba(0,0,0,0.3);
+}
+
+/* Forzar calendario siempre en modo claro */
+[data-theme="dark"] .calendario-forzado-claro {
+  background-color: #FFFFFF;
+  color: #1D1D1F;
+}
+[data-theme="dark"] .calendario-forzado-claro,
+[data-theme="dark"] .calendario-forzado-claro * {
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #F5F5F7;
+  --bg-card: #FFFFFF;
+  --bg-hover: #F5F5F7;
+  --text-primary: #1D1D1F;
+  --text-secondary: #86868B;
+  --text-tertiary: #C7C7CC;
+  --border-color: #E5E5EA;
+  --border-subtle: #F2F2F7;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+:root {
+  --apple-blue: #1D5FE0;
+  --apple-blue-hover: #1850BE;
+  --apple-text: #1D1D1F;
+  --apple-secondary: #86868B;
+  --apple-bg: #F5F5F7;
+  --apple-white: #FFFFFF;
+  --apple-border: rgba(0,0,0,0.08);
+  --apple-shadow: 0 2px 20px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04);
+  --apple-shadow-hover: 0 8px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
+}
+
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+  /* Keep the vertical scrollbar gutter reserved at all times — otherwise pages whose
+     content height varies (e.g. the calendar switching between 5-week and 6-week
+     months) visibly resize horizontally as the scrollbar appears/disappears. */
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+
+html, body, #root {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif;
+  background: var(--gradient-bg);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  text-align: left;
+  border: none;
+  min-height: 100vh;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.15);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0,0,0,0.25);
+}
+
+/* Páginas en el móvil (clase que ponen con useEsMovil): botones con texto e
+   inputs de al menos 44 px para tocarlos, e inputs a 16 px para que iOS no
+   haga zoom al enfocarlos. Los botones con un ancho fijado en línea (iconos,
+   casillas redondas) o vacíos se quedan como están. */
+.pagina-movil button:not(:empty):not([style^="width:"]):not([style*=" width:"]),
+.pagina-movil select,
+.pagina-movil input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]) {
+  min-height: 44px;
+}
+.pagina-movil input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+.pagina-movil select,
+.pagina-movil textarea {
+  font-size: 16px !important;
+}
+
+/* Fila con scroll horizontal sin barra visible (pasos del cliente en móvil);
+   cada hijo con role="tab" encaja al deslizar. */
+.fila-deslizable {
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.fila-deslizable::-webkit-scrollbar {
+  display: none;
+}
+.fila-deslizable [role="tab"] {
+  scroll-snap-align: start;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #F0F0F5 25%, #E4E4EB 50%, #F0F0F5 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+select option {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] select option {
+  background-color: #2C2C2E;
+  color: #FFFFFF;
+}
+
+/* Hoja inferior del móvil (panel del post en CalendarioPublicacion) */
+@keyframes aify-hoja-sube {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+/* Móvil (mismo corte que ANCHO_MOVIL en useEsMovil.js): los campos de texto a
+   16 px como mínimo. Por debajo, Safari de iOS hace zoom al enfocarlos y la
+   página se queda ampliada. !important porque casi todos los campos llevan el
+   tamaño en línea. */
+@media (max-width: 819.98px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}

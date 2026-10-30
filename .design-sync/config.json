@@ -1,0 +1,29 @@
+{
+  "projectId": "b0b2534c-3686-4739-bc09-bb97006ba10c",
+  "shape": "package",
+  "readmeHeader": ".design-sync/conventions.md",
+  "pkg": "aify",
+  "globalName": "Aify",
+  "srcDir": "src/components",
+  "cssEntry": ".design-sync/ds-styles.css",
+  "extraEntries": [
+    "react-router-dom",
+    "./src/context/AuthContext.jsx",
+    "./src/context/ThemeContext.jsx"
+  ],
+  "libOverrides": {
+    "source-kit.mjs": "aify's components use `export default function Name` / `export default class Name`; export * from never re-exports a default, so the synth entry needs an explicit named alias per default export or those components never land on window.Aify"
+  },
+  "overrides": {
+    "Tutorial": { "cardMode": "single", "primaryStory": "Default" }
+  },
+  "provider": {
+    "component": "MemoryRouter",
+    "inner": {
+      "component": "AuthProvider",
+      "inner": {
+        "component": "ThemeProvider"
+      }
+    }
+  }
+}

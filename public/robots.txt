@@ -1,0 +1,22 @@
+User-agent: *
+Allow: /
+Allow: /demo
+Allow: /agencias
+Allow: /checklist
+Allow: /calculadora
+
+Disallow: /dashboard
+Disallow: /clientes
+Disallow: /nuevo-cliente
+Disallow: /login
+Disallow: /forgot-password
+Disallow: /copies
+Disallow: /guiones
+Disallow: /lluvia-de-ideas
+Disallow: /facturas
+Disallow: /whatsapp
+Disallow: /todo
+Disallow: /calendario
+Disallow: /configuracion
+
+Sitemap: https://www.useaify.app/sitemap.xml
