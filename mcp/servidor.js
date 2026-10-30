@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import * as z from 'zod'
 import crypto from 'node:crypto'
+import { crearPizarras, ErrorPizarra, MAX_NODOS_POR_LLAMADA, TIPOS_SUBIDA_PIZARRA } from './pizarras.js'
 
 // ── MCP de Aify (docs/mcp.md) ─────────────────────────────────────────────────
 // Claude (Claude Code, Claude Desktop o claude.ai) usa Aify con herramientas.
@@ -22,6 +23,10 @@ import crypto from 'node:crypto'
 // mover_post y marcar_publicado tienen en cuenta la red; ver_metricas suma lo
 // de TikTok; ver_creador_tiktok y programar_tiktok usan las mismas funciones
 // que la web (creadorTikTok y programarPublicacionTikTok).
+//
+// Pizarras (0054_pizarras.sql): guardar_pizarra, listar_pizarras, ver_pizarra
+// y anadir_a_pizarra, para «Mira mi pizarra» de Aify Pictures. La lógica está
+// en mcp/pizarras.js, compartida con /api/pizarras de server.js.
 
 const MES_RE = /^\d{4}-(0[1-9]|1[0-2])$/
 const FECHA_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/
@@ -105,8 +110,9 @@ const herramienta = (nombre, fn) => async (args) => {
   try {
     return texto(await fn(args))
   } catch (err) {
-    if (!(err instanceof ErrorMcp)) console.error(`[mcp] ${nombre}:`, err.message)
-    return { ...texto(err instanceof ErrorMcp ? err.message : 'Error inesperado en Aify. Inténtalo de nuevo.'), isError: true }
+    const conMensaje = err instanceof ErrorMcp || err instanceof ErrorPizarra
+    if (!conMensaje) console.error(`[mcp] ${nombre}:`, err.message)
+    return { ...texto(conMensaje ? err.message : 'Error inesperado en Aify. Inténtalo de nuevo.'), isError: true }
   }
 }
 
@@ -147,6 +153,7 @@ export function crearServidorMcp(dependencias, { organizacionId, userId }) {
     tiktokAuditada, permisoPublicarTikTok,
   } = dependencias
   const servidor = new McpServer({ name: 'aify', version: '1.0.0' })
+  const pizarras = crearPizarras({ supabaseAdmin, bucket: bucketPublicaciones, organizacionId })
 
   async function clienteDeOrganizacion(clienteId, columnas = '*') {
     const { data, error } = await supabaseAdmin
@@ -538,13 +545,19 @@ export function crearServidorMcp(dependencias, { organizacionId, userId }) {
 
   servidor.registerTool('pedir_subida', {
     title: 'Pedir URL de subida',
-    description: 'Da una URL firmada para subir un archivo (vídeo MP4 o imagen JPEG) al almacenamiento de Aify. Sube el archivo con un PUT a esa URL (cabecera Content-Type con el tipo) y luego usa la "ruta" en programar_publicacion o programar_tiktok. La URL caduca a las 2 horas.',
+    description: 'Da una URL firmada para subir un archivo al almacenamiento de Aify. Sube el archivo con un PUT a esa URL (cabecera Content-Type con el tipo). La URL caduca a las 2 horas. '
+      + 'Con destino «publicacion» (por defecto): vídeo MP4 o imagen JPEG, y luego usa la "ruta" en programar_publicacion o programar_tiktok. '
+      + 'Con destino «pizarra»: también PNG, WebP, MOV y audio (WebM, MP3, M4A), y luego usa la "ruta" en anadir_a_pizarra.',
     inputSchema: {
       cliente_id: idSchema('id del cliente'),
       nombre_archivo: z.string().trim().min(1).max(255).describe('Nombre del archivo original, por ejemplo reel-noviembre.mp4'),
-      tipo: z.enum(Object.keys(TIPOS_SUBIDA)).describe('video/mp4 o image/jpeg'),
+      tipo: z.enum([...new Set([...Object.keys(TIPOS_SUBIDA), ...Object.keys(TIPOS_SUBIDA_PIZARRA)])])
+        .describe('Tipo MIME. Publicación: video/mp4 o image/jpeg. Pizarra: además image/png, image/webp, video/quicktime, audio/webm, audio/mpeg o audio/mp4'),
+      destino: z.enum(['publicacion', 'pizarra']).default('publicacion').describe('publicacion (por defecto, para programar) o pizarra (para anadir_a_pizarra)'),
     },
-  }, herramienta('pedir_subida', async ({ cliente_id, nombre_archivo, tipo }) => {
+  }, herramienta('pedir_subida', async ({ cliente_id, nombre_archivo, tipo, destino }) => {
+    if (destino === 'pizarra') return pizarras.pedirSubida({ cliente_id, nombre_archivo, tipo })
+    if (!TIPOS_SUBIDA[tipo]) throw new ErrorMcp('Para publicar, sube un vídeo MP4 (video/mp4) o una imagen JPEG (image/jpeg).')
     const cliente = await clienteDeOrganizacion(cliente_id, 'id')
     // Misma ruta que el navegador: <organización>/<cliente>/<uuid>.<ext>
     const ruta = `${organizacionId}/${cliente.id}/${crypto.randomUUID()}.${TIPOS_SUBIDA[tipo].ext}`
@@ -732,6 +745,57 @@ export function crearServidorMcp(dependencias, { organizacionId, userId }) {
     comprobar(error, 'el post')
     return { ok: true, cliente: cliente.nombre, post: { id: post.id, titulo: post.titulo, estado: 'publicado' } }
   }))
+
+  // ── Pizarras (Aify Pictures: «Mira mi pizarra») ──────────────────────────
+
+  servidor.registerTool('listar_pizarras', {
+    title: 'Listar pizarras',
+    description: 'Pizarras de Aify Pictures de un cliente (las 50 más recientes): id, título y fechas. Usa el id en ver_pizarra.',
+    inputSchema: { cliente_id: idSchema('id del cliente') },
+    annotations: { readOnlyHint: true },
+  }, herramienta('listar_pizarras', ({ cliente_id }) => pizarras.listar({ cliente_id })))
+
+  servidor.registerTool('ver_pizarra', {
+    title: 'Ver pizarra',
+    description: 'Lee una pizarra de Aify Pictures («Mira mi pizarra»): título, cliente y contenido { nodos, flechas, apuntes }. '
+      + 'Cada nodo tiene id, tipo, posición (x, y, ancho, alto) y datos. Tipos: nota (texto e indicaciones del usuario en datos.texto), '
+      + 'imagen (referencia o pieza), video, voz (nota de voz o audio), enlace (URL en datos.url), kit (kit de marca: colores, fuentes, logo). '
+      + 'Las flechas van de un nodo (desde) a otro (hasta), con texto opcional: léelas como «esto va con esto» o «haz esto con esto». '
+      + 'Los apuntes son notas largas en markdown del proyecto. Los nodos con archivo traen "url": una URL de lectura que caduca en 1 hora, para ver la imagen o descargar el vídeo o el audio.',
+    inputSchema: { pizarra_id: idSchema('id de la pizarra (de listar_pizarras o del enlace que da Aify Pictures)') },
+    annotations: { readOnlyHint: true },
+  }, herramienta('ver_pizarra', ({ pizarra_id }) => pizarras.ver({ pizarra_id })))
+
+  servidor.registerTool('guardar_pizarra', {
+    title: 'Guardar pizarra',
+    description: 'Crea una pizarra (sin pizarra_id) o sustituye una entera (con pizarra_id) con el JSON de Aify Pictures { nodos, flechas, apuntes }, como mucho 1 MB. '
+      + 'Para dejar resultados en una pizarra que ya existe usa anadir_a_pizarra, que no pisa lo que hay. Devuelve pizarra_id y actualizada_en.',
+    inputSchema: {
+      cliente_id: idSchema('id del cliente'),
+      pizarra_id: idSchema('id de la pizarra que se sustituye (opcional; sin él, se crea una nueva)').optional(),
+      titulo: z.string().trim().min(1).max(200).describe('Título de la pizarra'),
+      contenido: z.object({
+        nodos: z.array(z.object({ id: z.string().min(1), tipo: z.string().min(1) }).passthrough()).default([]),
+        flechas: z.array(z.object({}).passthrough()).default([]),
+      }).passthrough().describe('JSON de la pizarra: { nodos: [{ id, tipo, x, y, ancho, alto, datos }], flechas: [{ id, desde, hasta, texto? }], apuntes? }'),
+    },
+  }, herramienta('guardar_pizarra', ({ cliente_id, pizarra_id, titulo, contenido }) => pizarras.guardar({ cliente_id, pizarra_id, titulo, contenido })))
+
+  servidor.registerTool('anadir_a_pizarra', {
+    title: 'Añadir a la pizarra',
+    description: `Deja en una pizarra de Aify Pictures lo que has hecho (el guion, el copy, la imagen generada, el reel montado), sin borrar nada de lo que hay. Como mucho ${MAX_NODOS_POR_LLAMADA} nodos por llamada. `
+      + 'Una nota lleva texto; una imagen, un vídeo o un audio llevan la ruta que devuelve pedir_subida con destino «pizarra» (y texto opcional como pie). '
+      + 'Con cerca_de (id de un nodo de ver_pizarra) el nodo se coloca a su derecha; si no, a la derecha de todo. Devuelve los ids de los nodos creados.',
+    inputSchema: {
+      pizarra_id: idSchema('id de la pizarra'),
+      nodos: z.array(z.object({
+        tipo: z.enum(['nota', 'imagen', 'video', 'audio']).describe('nota, imagen, video o audio'),
+        texto: z.string().max(20000).optional().describe('Texto de la nota (o pie de la imagen, el vídeo o el audio)'),
+        ruta: z.string().min(1).max(500).optional().describe('Ruta del archivo (de pedir_subida con destino «pizarra»), para imagen, video y audio'),
+        cerca_de: z.string().min(1).max(100).optional().describe('id de un nodo de la pizarra: el nuevo se coloca a su derecha'),
+      })).min(1).max(MAX_NODOS_POR_LLAMADA),
+    },
+  }, herramienta('anadir_a_pizarra', ({ pizarra_id, nodos }) => pizarras.anadir({ pizarra_id, nodos })))
 
   return servidor
 }
