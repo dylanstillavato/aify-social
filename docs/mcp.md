@@ -50,6 +50,10 @@ móvil con la misma cuenta. Los conectores personalizados dependen del plan de C
 4. Se abre Aify: inicia sesión y pulsa **Permitir**.
 5. En un chat nuevo, activa Aify en el menú de herramientas y pídele lo que quieras.
 
+Desde el navegador (@Pictures), `/mcp` acepta CORS de la web de Aify y de
+`AIFY_PICTURES_ORIGINS` (por defecto `https://pictures.useaify.app`,
+`http://localhost:5173` y `http://localhost:4173`); la clave sigue siendo obligatoria.
+
 ### Claude Code
 
 Con una clave: créala en Configuración → Tu IA → «Crear clave» y pega en la terminal:

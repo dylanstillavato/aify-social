@@ -49,7 +49,7 @@ export default function AvisoConectaIa() {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Conecta tu IA</div>
               <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 3, lineHeight: 1.45 }}>
-                {mensaje.replace(/\.$/, '')}. En Aify Social la IA la pones tú: tu clave de Claude o de Gemini, y lo que gaste lo paga tu cuenta.
+                {mensaje.replace(/\.$/, '')}. En @Social la IA la pones tú: tu clave de Claude o de Gemini, y lo que gaste lo paga tu cuenta.
               </div>
               <button type="button" onClick={irATuIa}
                 style={{ marginTop: 12, padding: '9px 16px', borderRadius: 10, border: 'none', background: '#1D5FE0', color: 'white', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer' }}>

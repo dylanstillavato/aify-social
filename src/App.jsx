@@ -17,7 +17,7 @@ import { useOrganizacion } from './hooks/useOrganizacion'
 import { useEsMovil, ALTO_BARRA_INFERIOR } from './hooks/useEsMovil'
 import BarraInferiorMovil from './components/BarraInferiorMovil'
 import { useTheme } from './context/ThemeContext'
-import faviconIcon from './assets/favicon-icon.png'
+import Marca from './components/Marca'
 
 // Route-level code splitting — each page only downloads when actually visited,
 // instead of all pages bloating the initial bundle.
@@ -115,8 +115,7 @@ function BarraSuperiorMovil() {
       background: 'var(--sidebar-bg)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
       borderBottom: '1px solid var(--border-color)',
     }}>
-      <img src={faviconIcon} alt="Aify" style={{ width: 26, height: 26, borderRadius: 7, filter: theme === 'dark' ? 'invert(1)' : 'none' }} />
-      <span style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--text-primary)', lineHeight: 1 }}>Aify</span>
+      <Marca oscuro={theme === 'dark'} tamano={20} />
     </header>
   )
 }

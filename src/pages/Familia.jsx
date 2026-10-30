@@ -14,7 +14,7 @@ import { Reveal, Magnetic, BenefitRow, CalendarioMockup, CopiesMockup, FloatingC
 // ── Familia Aify (/demo) ─────────────────────────────────────────────────────
 // La landing de la familia de apps, con el mismo estilo que la portada
 // (Landing.jsx): cielo azul, tarjetas flotantes, pestañas con maquetas, FAQ y
-// pie oscuro. Cuenta lo nuevo: Aify Social y Aify Pictures, gratis, de código
+// pie oscuro. Cuenta lo nuevo: @Social y @Pictures, gratis, de código
 // abierto y con la IA de cada uno («Tu IA»).
 //
 // A propósito sin useAuth()/useNavigate() y con <a href> normales: así se
@@ -28,14 +28,14 @@ const URL_GITHUB_SOCIAL = 'https://github.com/dylanstillavato/aify-social'
 
 const APPS = [
   {
-    id: 'social', icon: Calendar, label: 'Aify Social', marca: 'Social',
+    id: 'social', icon: Calendar, label: '@Social', marca: 'Social',
     title: 'El CRM para gestores de redes',
     desc: 'Tus clientes, sus ideas, los guiones, el calendario y las métricas en un solo sitio, con la memoria de cada marca. Y publica en Instagram y TikTok sin salir.',
     benefits: ['Ficha de cada cliente con su tono y su sector', 'Calendario mensual y guiones de reels', 'Publicar y programar en Instagram y TikTok', 'Métricas de cada pieza a las 24 h'],
-    cta: { texto: 'Entrar en Aify Social', href: URL_SOCIAL },
+    cta: { texto: 'Entrar en @Social', href: URL_SOCIAL },
   },
   {
-    id: 'pictures', icon: ImageIcon, label: 'Aify Pictures', marca: 'Pictures',
+    id: 'pictures', icon: ImageIcon, label: '@Pictures', marca: 'Pictures',
     title: 'El editor de imágenes gratis',
     desc: 'Capas, máscaras, ajustes, texto y archivos PSD de verdad, en el navegador. Basado en PhotoCraft, de código abierto, y pensado para las piezas de redes.',
     benefits: ['Sin instalar nada: se abre en el navegador', 'Abre y guarda PSD con sus capas', 'Los atajos de siempre: ⌘J, ⌘Z, ⌘0…', 'Tus fotos no salen de tu ordenador'],
@@ -46,7 +46,7 @@ const APPS = [
     title: 'La pizarra para dar indicaciones',
     desc: 'Deja referencias, notas escritas a mano, flechas y notas de voz. Tu IA lee la pizarra y los apuntes y te devuelve la pieza, el guion o el copy.',
     benefits: ['Referencias de YouTube, Instagram y TikTok', 'Notas a mano, flechas y notas de voz', 'Apuntes al lado de cada proyecto', '«Pídeselo a la IA» sobre lo que dejas'],
-    cta: { texto: 'Ver Aify Pictures', href: URL_PICTURES },
+    cta: { texto: 'Ver @Pictures', href: URL_PICTURES },
     proximamente: true,
   },
   {
@@ -59,11 +59,11 @@ const APPS = [
 ]
 
 const FAQS = [
-  { q: '¿Es gratis de verdad?', a: 'Sí. Aify Social y Aify Pictures son gratis y de código abierto. Lo único que puede costarte dinero es tu propia IA (tu plan de Claude o de ChatGPT, o tu clave de API), y eso lo pagas directamente a ellos.' },
+  { q: '¿Es gratis de verdad?', a: 'Sí. @Social y @Pictures son gratis y de código abierto. Lo único que puede costarte dinero es tu propia IA (tu plan de Claude o de ChatGPT, o tu clave de API), y eso lo pagas directamente a ellos.' },
   { q: '¿Qué es «Tu IA»?', a: 'La IA la pones tú. Puedes conectar tu Claude o tu ChatGPT con tu plan, con el conector de Aify, y entonces tu IA ve tus clientes, tus ideas y tus pizarras. O puedes poner tu clave de API para que la usen los botones de la app.' },
   { q: '¿Necesito pagar Claude o ChatGPT?', a: 'Para usar Aify, no. Para las funciones de IA sí necesitas tu propia IA: con el plan que ya tengas en Claude o en ChatGPT basta, o con una clave de API.' },
   { q: '¿Me vais a pedir la contraseña de Claude o de ChatGPT?', a: 'Nunca. La conexión se hace desde tu propio Claude o ChatGPT, añadiendo el conector de Aify, o con una clave de API que puedes borrar cuando quieras.' },
-  { q: '¿Qué significa que sea de código abierto?', a: 'Que el código se puede ver, mejorar y compartir. Aify Pictures parte de PhotoCraft, un editor abierto que admiramos, y decimos de dónde sale. Las mejoras las hacemos con quien lo usa.' },
+  { q: '¿Qué significa que sea de código abierto?', a: 'Que el código se puede ver, mejorar y compartir. @Pictures parte de PhotoCraft, un editor abierto que admiramos, y decimos de dónde sale. Las mejoras las hacemos con quien lo usa.' },
   { q: '¿Puedo ayudar a mejorarlo?', a: 'Sí: cuéntanos qué te falta, abre una propuesta en GitHub o mándanos tu cambio. Lo que funcione para todos entra en la siguiente versión.' },
 ]
 
@@ -93,7 +93,7 @@ function Navbar() {
         border: scrolled ? '1px solid rgba(11,11,15,0.06)' : '1px solid rgba(255,255,255,0.3)',
         boxShadow: scrolled ? '0 8px 30px rgba(11,11,15,0.1)' : 'none',
       }}>
-        <a href="/demo" style={{ textDecoration: 'none' }}><MarcaAify claro={!scrolled} /></a>
+        <a href="/demo" style={{ textDecoration: 'none' }}><MarcaAify claro={!scrolled} tamano={24} /></a>
         <div className="familia-desktop-nav" style={{ display: 'flex', gap: 28 }}>
           {links.map(([texto, href]) => (
             <a key={href} href={href} style={{ fontSize: 13.5, color: colorLink, textDecoration: 'none', transition: 'color 0.15s' }}>{texto}</a>
@@ -130,13 +130,10 @@ function Navbar() {
   )
 }
 
-// Las tejas de las apps (iniciales de la familia, con su punto) que flotan en el hero.
-function TejaApp({ letra, fondo, tinta, punto }) {
+// Las tejas de las apps (inicial de la app con su punto, en SVG) que flotan en el hero.
+function TejaApp({ src, alt }) {
   return (
-    <div style={{ width: 64, height: 64, borderRadius: 18, background: fondo, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', boxShadow: '0 16px 40px rgba(11,11,15,0.25)' }}>
-      <span style={{ fontFamily: 'var(--font-display)', fontSize: 38, color: tinta, lineHeight: 1 }}>{letra}</span>
-      <span style={{ position: 'absolute', right: 9, bottom: 9, width: 11, height: 11, borderRadius: '50%', background: punto }} />
-    </div>
+    <img src={src} alt={alt} style={{ display: 'block', width: 64, height: 64, borderRadius: 18, boxShadow: '0 16px 40px rgba(11,11,15,0.25)' }} />
   )
 }
 
@@ -177,7 +174,7 @@ function Hero() {
           <span data-hero-line style={{ display: 'block' }}>gratis y con tu propia IA</span>
         </h1>
         <p data-hero-p style={{ fontSize: 18, color: 'rgba(255,255,255,0.85)', lineHeight: 1.6, marginBottom: 34, maxWidth: 580, marginLeft: 'auto', marginRight: 'auto' }}>
-          Aify Social para llevar las redes de tus clientes. Aify Pictures para crear las piezas. Conecta tu Claude o tu ChatGPT y trabaja con todo, sin pagarnos nada.
+          @Social para llevar las redes de tus clientes. @Pictures para crear las piezas. Conecta tu Claude o tu ChatGPT y trabaja con todo, sin pagarnos nada.
         </p>
         <div data-hero-cta style={{ display: 'flex', gap: 12, marginBottom: 90, flexWrap: 'wrap', justifyContent: 'center' }}>
           <Magnetic>
@@ -200,7 +197,7 @@ function Hero() {
           </div>
         </FloatingCard>
         <FloatingCard rotate={5} delay={0.35} style={{ left: '22%', top: -24 }}>
-          <TejaApp letra="S" fondo={LIME} tinta={INK} punto={INK} />
+          <TejaApp src="/marca/aify-social.svg" alt="@Social" />
         </FloatingCard>
         <FloatingCard rotate={-3} delay={0.1} style={{ left: '38%', top: 20, width: 150 }}>
           <div style={{ background: INK, borderRadius: 14, padding: '16px 18px', boxShadow: '0 16px 40px rgba(11,11,15,0.3)' }}>
@@ -209,7 +206,7 @@ function Hero() {
           </div>
         </FloatingCard>
         <FloatingCard rotate={6} delay={0.45} style={{ left: '60%', top: -26 }}>
-          <TejaApp letra="P" fondo={SKY_DEEP} tinta="white" punto={LIME} />
+          <TejaApp src="/marca/aify-pictures.svg" alt="@Pictures" />
         </FloatingCard>
         <FloatingCard rotate={-5} delay={0.25} style={{ left: '76%', top: 18, width: 148 }}>
           <div style={{ background: LIME, borderRadius: 14, padding: '14px 16px', boxShadow: '0 16px 40px rgba(11,11,15,0.22)', display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -252,7 +249,7 @@ function FuncionaCon() {
 
 function QueCambia() {
   const antes = ['Un plan de pago al mes para usar la app', 'IA limitada, la que pagábamos nosotros', 'Código cerrado: lo que hay es lo que hay', 'Una sola app para todo', 'El editor de imágenes, de pago y aparte']
-  const ahora = ['Gratis, sin planes ni tarjeta', 'Tu IA: tu Claude o tu ChatGPT, con tu plan', 'Código abierto: lo mejoramos contigo', 'Varias apps que hablan entre sí', 'Aify Pictures, el editor gratis en el navegador']
+  const ahora = ['Gratis, sin planes ni tarjeta', 'Tu IA: tu Claude o tu ChatGPT, con tu plan', 'Código abierto: lo mejoramos contigo', 'Varias apps que hablan entre sí', '@Pictures, el editor gratis en el navegador']
   return (
     <section style={{ padding: '96px 32px', background: SURFACE_ALT }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
@@ -558,18 +555,18 @@ function LlamadaFinal() {
             Empieza gratis. Trae tu IA.
           </h2>
           <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.85)', marginBottom: 32, lineHeight: 1.5 }}>
-            Crea tu cuenta en Aify Social o abre el editor de Aify Pictures. Sin tarjeta y sin planes.
+            Crea tu cuenta en @Social o abre el editor de @Pictures. Sin tarjeta y sin planes.
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
             <Magnetic>
               <motion.a href={URL_SOCIAL} whileTap={{ scale: 0.97 }}
                 style={{ display: 'inline-block', padding: '15px 34px', borderRadius: 24, background: LIME, fontSize: 16, fontWeight: 700, color: INK, textDecoration: 'none', boxShadow: '0 8px 28px rgba(0,0,0,0.2)' }}>
-                Entrar en Aify Social
+                Entrar en @Social
               </motion.a>
             </Magnetic>
             <motion.a href={URL_EDITOR} whileHover={{ backgroundColor: 'rgba(255,255,255,0.16)' }} whileTap={{ scale: 0.97 }}
               style={{ display: 'inline-block', padding: '15px 28px', borderRadius: 24, border: '1px solid rgba(255,255,255,0.35)', background: 'rgba(255,255,255,0.08)', fontSize: 16, fontWeight: 500, color: 'white', textDecoration: 'none' }}>
-              Abrir Aify Pictures
+              Abrir @Pictures
             </motion.a>
           </div>
         </Reveal>
@@ -580,8 +577,8 @@ function LlamadaFinal() {
 
 function Pie() {
   const cols = [
-    { title: 'Apps', links: [['Aify Social', '/'], ['Aify Pictures', URL_PICTURES]] },
-    { title: 'Código', links: [['Aify Social en GitHub', URL_GITHUB_SOCIAL], ['Aify Pictures en GitHub', URL_GITHUB_PICTURES], ['PhotoCraft', 'https://github.com/storytold/photocraft']] },
+    { title: 'Apps', links: [['@Social', '/'], ['@Pictures', URL_PICTURES]] },
+    { title: 'Código', links: [['@Social en GitHub', URL_GITHUB_SOCIAL], ['@Pictures en GitHub', URL_GITHUB_PICTURES], ['PhotoCraft', 'https://github.com/storytold/photocraft']] },
     { title: 'Legal', links: [['Privacidad', '/privacidad'], ['Términos', '/terminos'], ['Cookies', '/cookies']] },
   ]
   return (

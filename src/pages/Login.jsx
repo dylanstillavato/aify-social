@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { supabase } from '../services/supabase'
 import { isOnboardingCompleto, markOnboardingCompleto } from '../utils/onboarding'
-import faviconIcon from '../assets/favicon-icon.png'
+import Marca from '../components/Marca'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -272,8 +272,7 @@ export default function Login() {
       >
         {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 8 }}>
-          <img src={faviconIcon} alt="Aify" style={{ width: 32, height: 32, borderRadius: 10, flexShrink: 0, filter: theme === 'dark' ? 'invert(1)' : 'none' }} />
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: 'var(--text-primary)', lineHeight: 1 }}>Aify</span>
+          <Marca oscuro={theme === 'dark'} tamano={22} />
         </div>
 
         <p style={{ fontSize: 15, color: 'var(--text-secondary)', textAlign: 'center', marginTop: 8, marginBottom: 28 }}>

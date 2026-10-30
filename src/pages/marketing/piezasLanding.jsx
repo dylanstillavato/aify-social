@@ -5,7 +5,7 @@
 import { useEffect, useRef } from 'react'
 import { gsap } from 'gsap'
 import { Check } from 'lucide-react'
-import faviconIcon from '../../assets/favicon-icon.png'
+import Marca from '../../components/Marca'
 import { SKY_DEEP, SKY_MID, SKY_LIGHT, INK, INK_SOFT, INK_FAINT, CARD, GREEN, ORANGE } from './shared'
 
 const NET_COLORS = {
@@ -173,15 +173,12 @@ export function FloatingCard({ style, children, rotate = 0, delay = 0 }) {
   )
 }
 
-// El logo: la @ de la foto de perfil, «Aify» en Super Jello y el nombre de la
-// app en gris (como en la cabecera de la portada). Sobre fondo oscuro, invertido.
+// El logo: «@ Aify» y el nombre de la app en gris, en SVG (public/marca/).
+// `claro` = marca clara, para fondos oscuros; `tamano` = cuerpo del texto.
 export function MarcaAify({ app, claro = false, tamano = 17 }) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-      <img src={faviconIcon} alt="" style={{ width: tamano + 9, height: tamano + 9, borderRadius: 7, filter: claro ? 'invert(1) brightness(1.6)' : 'none', transition: 'filter 0.3s' }} />
-      <span style={{ fontFamily: 'var(--font-display)', fontSize: tamano, color: claro ? 'rgba(255,255,255,0.92)' : INK, lineHeight: 1, whiteSpace: 'nowrap', transition: 'color 0.3s' }}>
-        Aify{app && <> <span style={{ color: claro ? 'rgba(255,255,255,0.7)' : INK_SOFT, transition: 'color 0.3s' }}>{app}</span></>}
-      </span>
+    <span style={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
+      <Marca app={app} oscuro={claro} tamano={tamano} />
     </span>
   )
 }
