@@ -2,7 +2,8 @@
 
 Con el MCP de Aify, Claude (Claude Code, Claude Desktop o claude.ai) usa Aify
 con herramientas: ve los clientes, las ideas, el calendario, los guiones y las
-métricas sin abrir el navegador.
+métricas sin abrir el navegador. También lee y escribe las pizarras de Aify
+Pictures («Mira mi pizarra»).
 
 - Código: `mcp/servidor.js` (lo monta `server.js` en `POST /mcp`).
 - Transporte: Streamable HTTP sin estado (un servidor MCP por petición). `GET`
@@ -83,7 +84,7 @@ No hay herramientas para borrar clientes ni posts.
 | `crear_idea` | `cliente_id`, `titulo`, `concepto`, `formato` (`video`/`carrusel`), `mes?` | guarda una idea en la Lluvia de ideas del cliente |
 | `crear_post` | `cliente_id`, `fecha` (`YYYY-MM-DD`), `hora` (`HH:MM`), `formato` (`video`/`reel`/`carrusel`/`historia`), `titulo`, `red?` (`instagram`/`tiktok`/`instagram_y_tiktok`, por defecto `instagram`), `guion?` | crea un post en el calendario, como «Nuevo post» en la web (los dos = red `instagram` + `comparte_en: ['tiktok']`). El guion puede ser un texto (una frase por línea) o el objeto de Aify (`gancho`, `contenido.frases`, `cierre`…) |
 | `mover_post` | `post_id`, `fecha`, `hora` | cambia el día y la hora (y pone fecha a un guion sin programar). Si está programado en Instagram o en TikTok, lo reprograma a la nueva hora (hora de España). Lo que se está publicando o ya salió desde Aify (en cualquiera de las dos) no se mueve |
-| `pedir_subida` | `cliente_id`, `nombre_archivo`, `tipo` (`video/mp4`/`image/jpeg`) | URL firmada de subida al bucket `publicaciones`, con la ruta `<organización>/<cliente>/<uuid>.<ext>` (la misma que usa el navegador). Caduca a las 2 h |
+| `pedir_subida` | `cliente_id`, `nombre_archivo`, `tipo`, `destino?` (`publicacion`/`pizarra`, por defecto `publicacion`) | URL firmada de subida al bucket `publicaciones`. Sin `destino` (o `publicacion`): `video/mp4` o `image/jpeg`, ruta `<organización>/<cliente>/<uuid>.<ext>` (la misma que usa el navegador), igual que siempre. Con `destino: "pizarra"`: además `image/png`, `image/webp`, `video/quicktime`, `audio/webm`, `audio/mpeg` y `audio/mp4`, ruta `<organización>/<cliente>/pizarras/<uuid>.<ext>`, para `anadir_a_pizarra`. Caduca a las 2 h |
 | `programar_publicacion` | `cliente_id`, `post_id`, `tipo` (`reel`/`post`/`carrusel`/`historia`), `rutas[]`, `caption`, `publicar_en` (ISO con zona), `compartir_en_feed?` | programa (o reprograma) la publicación con la misma función que el botón «Programar» de la web (`programarPublicacion` en `server.js`). Si sustituye archivos, borra los anteriores que ya no se usan. |
 | `programar_tiktok` | `cliente_id`, `post_id`, `tipo` (`video`/`fotos`), `rutas[]`, `titulo`, `descripcion?`, `privacidad`, `permitir_comentarios?`, `permitir_duo?`, `permitir_stitch?`, `contenido_comercial?`, `marca_propia?`, `contenido_de_marca?`, `es_ia?`, `musica_auto?`, `consentimiento: true`, `publicar_en` | programa (o reprograma) en TikTok un post que sale en TikTok, con la misma función que la web (`programarPublicacionTikTok`). La privacidad la elige el usuario (sin valor por defecto) entre las de `ver_creador_tiktok`; las interacciones van desmarcadas salvo que las pida; `consentimiento` solo si aceptó las condiciones de TikTok (se guarda la fecha). Hasta la auditoría de TikTok, solo `SELF_ONLY`. Necesita TikTok conectado |
 | `marcar_publicado` | `post_id` | marca como publicado un post que se subió a Instagram o a TikTok a mano. Lo programado desde Aify (en cualquiera de las dos) se marca solo al publicarse |
@@ -104,3 +105,89 @@ No hay herramientas para borrar clientes ni posts.
 
 Desde ahí, el proceso de publicación de `server.js` lo publica a su hora igual
 que lo programado desde la web.
+
+## Pizarras (Aify Pictures)
+
+Aify Pictures Studio sube la pizarra de un proyecto (notas, referencias,
+flechas, notas de voz, kit de marca) y la IA del usuario la lee y deja ahí lo
+que hace. Tabla `pizarras` (migración `0054_pizarras.sql`); la lógica está en
+`mcp/pizarras.js` y la comparten las herramientas y las rutas REST. Sin la
+migración, las herramientas responden «Las pizarras aún no están activadas en
+Aify» (con `isError`) y las rutas, 503.
+
+El `contenido` es el JSON de Studio: `{ nodos, flechas, apuntes }`, como mucho 1 MB.
+
+- Nodo: `{ id, tipo, x, y, ancho, alto, datos }`. Tipos: `nota` (texto en
+  `datos.texto`), `imagen`, `video`, `voz` (audio), `enlace` (URL en
+  `datos.url`) y `kit` (kit de marca). Los archivos subidos a Aify llevan su
+  ruta en `datos.ruta`.
+- Flecha: `{ id, desde, hasta, texto? }` (ids de nodos).
+- Apunte: `{ id, titulo, texto, actualizado }` (markdown).
+
+Aify guarda tal cual lo que no conoce del contenido.
+
+| Herramienta | Entrada | Qué hace |
+| --- | --- | --- |
+| `listar_pizarras` | `cliente_id` | las 50 pizarras más recientes del cliente: `pizarra_id`, título y fechas |
+| `ver_pizarra` | `pizarra_id` | título, cliente, `actualizada_en` y contenido. Cada nodo con archivo trae `url`, una URL de lectura que caduca en 1 h. Solo se firman rutas de la carpeta `pizarras/` de su cliente |
+| `guardar_pizarra` | `cliente_id`, `pizarra_id?`, `titulo`, `contenido` | sin `pizarra_id` crea una pizarra; con él la sustituye entera. Devuelve `{ pizarra_id, actualizada_en }` |
+| `anadir_a_pizarra` | `pizarra_id`, `nodos[]` (máx. 20): `{ tipo: nota/imagen/video/audio, texto?, ruta?, cerca_de? }` | añade nodos sin borrar los que hay. Una nota lleva `texto`; imagen, vídeo y audio, la `ruta` de `pedir_subida` con destino `pizarra` (de esa organización y ese cliente). Con `cerca_de` (id de un nodo) el nuevo va a su derecha; si no, a la derecha de todo. Cada nodo nuevo lleva `id`, `autor: "claude"` y `creado_en`; el audio se guarda con el tipo `voz` de Studio. Devuelve los ids creados |
+
+### «Mira mi pizarra»
+
+1. En Aify Pictures, el usuario pulsa «Mira mi pizarra»: Studio guarda la
+   pizarra en Aify y le da a su IA el `pizarra_id`.
+2. La IA llama a `ver_pizarra`: lee las notas, sigue las flechas y abre las
+   imágenes, los vídeos y los audios con su `url`.
+3. Trabaja: escribe el guion o el copy, genera la imagen, monta el reel.
+4. Para cada archivo, `pedir_subida` con `destino: "pizarra"` y un PUT a la
+   `url_subida`:
+
+   ```bash
+   curl -X PUT -H "Content-Type: image/png" --data-binary @"portada.png" "<url_subida>"
+   ```
+
+5. `anadir_a_pizarra` con una nota por texto y un nodo por archivo (su `ruta`),
+   con `cerca_de` el nodo al que responde. Studio los ve al volver a leer la
+   pizarra.
+
+### Desde Studio, sin MCP: `/api/pizarras`
+
+Las mismas operaciones por REST, con la misma autenticación que `/mcp`
+(`Authorization: Bearer aify_...`) y el mismo formato de respuesta. Aceptan
+CORS de los mismos orígenes que `/mcp` (`AIFY_PICTURES_ORIGINS`). Errores:
+`{ error }` con 400, 401, 404, 409, 413 o 503.
+
+| Ruta | Cuerpo | Respuesta |
+| --- | --- | --- |
+| `GET /api/pizarras?cliente_id=<id>` | — | `{ cliente, pizarras: [{ pizarra_id, titulo, cliente_id, creada_en, actualizada_en }] }` |
+| `POST /api/pizarras` | `{ cliente_id, titulo, contenido }` | `{ pizarra_id, actualizada_en, creada: true }` |
+| `GET /api/pizarras/:id` | — | lo mismo que `ver_pizarra` |
+| `PUT /api/pizarras/:id` | `{ titulo, contenido, actualizada_en? }` | `{ pizarra_id, actualizada_en, creada: false }`. Con `actualizada_en` (la de la última lectura), solo guarda si nadie ha cambiado la pizarra desde entonces; si la IA ha añadido algo, 409 y hay que volver a leerla |
+| `POST /api/pizarras/:id/nodos` | `{ nodos }` | lo mismo que `anadir_a_pizarra` |
+| `POST /api/pizarras/subidas` | `{ cliente_id, nombre_archivo, tipo }` | lo mismo que `pedir_subida` con destino `pizarra` |
+
+Antes de guardar, Studio quita el campo `url` de los nodos (lo añade Aify al
+leer y caduca). Ejemplo:
+
+```js
+const AIFY = 'https://aify-backend.onrender.com'
+const cabeceras = { Authorization: `Bearer ${claveAify}`, 'Content-Type': 'application/json' }
+
+// Leer (por ejemplo, cada pocos segundos mientras la IA trabaja)
+const pizarra = await fetch(`${AIFY}/api/pizarras/${pizarraId}`, { headers: cabeceras }).then(r => r.json())
+
+// Guardar sin pisar lo que haya añadido la IA
+const nodos = pizarra.contenido.nodos.map(({ url, ...nodo }) => nodo)
+const r = await fetch(`${AIFY}/api/pizarras/${pizarraId}`, {
+  method: 'PUT',
+  headers: cabeceras,
+  body: JSON.stringify({ titulo: pizarra.titulo, contenido: { ...pizarra.contenido, nodos }, actualizada_en: pizarra.actualizada_en }),
+})
+if (r.status === 409) { /* volver a leer, mezclar y guardar otra vez */ }
+```
+
+Los archivos de las pizarras viven en el bucket `publicaciones`, bajo
+`<organización>/<cliente>/pizarras/`. La limpieza del bucket de `server.js`
+no borra los que usa alguna pizarra; los que no usa ninguna se borran a las 24 h,
+como el resto.

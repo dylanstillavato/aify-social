@@ -7,6 +7,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import crypto from 'node:crypto'
 import { Readable } from 'node:stream'
 import { montarMcp } from './mcp/servidor.js'
+import { crearPizarras, ErrorPizarra } from './mcp/pizarras.js'
 import * as z from 'zod'
 
 dotenv.config()
@@ -38,6 +39,12 @@ app.use('/mcp', cors({
   origin: ORIGENES_MCP,
   allowedHeaders: ['Authorization', 'Content-Type', 'Accept', 'Mcp-Session-Id', 'Mcp-Protocol-Version'],
   exposedHeaders: ['Mcp-Session-Id'],
+}))
+// Las pizarras de Aify Pictures (/api/pizarras, misma autenticación que el MCP)
+// se leen y se guardan desde Studio, en el navegador: mismos orígenes que /mcp.
+app.use('/api/pizarras', cors({
+  origin: ORIGENES_MCP,
+  allowedHeaders: ['Authorization', 'Content-Type'],
 }))
 // La lista de espera de la landing de Aify Pictures (POST /api/pictures/lista-espera)
 // solo se llama desde Pictures; va aquí por la misma razón (el preflight).
@@ -1324,6 +1331,60 @@ async function requireClaveApi(req, res, next) {
   }
   next()
 }
+
+// ── Pizarras de Aify Pictures por REST (0054_pizarras.sql, docs/mcp.md) ──────
+// Lo mismo que las herramientas de pizarras del MCP (mcp/pizarras.js), para
+// que Studio lea y guarde sin hablar MCP. Misma autenticación que /mcp
+// (requireClaveApi) y mismo formato de respuesta. PUT con actualizada_en solo
+// guarda si nadie ha cambiado la pizarra desde entonces (si no, 409).
+
+function rutaPizarras(fn) {
+  return async (req, res) => {
+    if (!supabaseAdmin) return res.status(503).json({ error: 'Base de datos no disponible en el servidor' })
+    const pizarras = crearPizarras({ supabaseAdmin, bucket: BUCKET_PUBLICACIONES, organizacionId: req.organizacionId })
+    try {
+      res.json(await fn(pizarras, req))
+    } catch (err) {
+      if (err instanceof ErrorPizarra) return res.status(err.estado).json({ error: err.message })
+      console.error('[pizarras] error inesperado:', err.message)
+      res.status(500).json({ error: 'Error inesperado en Aify. Inténtalo de nuevo.' })
+    }
+  }
+}
+
+const exigirUuid = (valor, que) => {
+  if (typeof valor !== 'string' || !UUID_RE.test(valor)) throw new ErrorPizarra(`Falta ${que} o no es válido.`)
+  return valor
+}
+
+app.get('/api/pizarras', requireClaveApi, rutaPizarras((p, req) => p.listar({ cliente_id: exigirUuid(req.query.cliente_id, 'cliente_id') })))
+
+app.post('/api/pizarras', requireClaveApi, rutaPizarras((p, req) => {
+  const { cliente_id, titulo, contenido } = req.body || {}
+  return p.guardar({ cliente_id: exigirUuid(cliente_id, 'cliente_id'), titulo, contenido })
+}))
+
+app.post('/api/pizarras/subidas', requireClaveApi, rutaPizarras((p, req) => {
+  const { cliente_id, nombre_archivo, tipo } = req.body || {}
+  const nombre = typeof nombre_archivo === 'string' ? nombre_archivo.trim().slice(0, 255) : ''
+  if (!nombre) throw new ErrorPizarra('Falta nombre_archivo.')
+  return p.pedirSubida({ cliente_id: exigirUuid(cliente_id, 'cliente_id'), nombre_archivo: nombre, tipo })
+}))
+
+app.get('/api/pizarras/:id', requireClaveApi, rutaPizarras((p, req) => p.ver({ pizarra_id: exigirUuid(req.params.id, 'el id de la pizarra') })))
+
+app.put('/api/pizarras/:id', requireClaveApi, rutaPizarras((p, req) => {
+  const { titulo, contenido, actualizada_en } = req.body || {}
+  if (actualizada_en !== undefined && (typeof actualizada_en !== 'string' || Number.isNaN(Date.parse(actualizada_en)))) {
+    throw new ErrorPizarra('actualizada_en tiene que ser la fecha que devolvió Aify al leer o guardar la pizarra.')
+  }
+  return p.guardar({ pizarra_id: exigirUuid(req.params.id, 'el id de la pizarra'), titulo, contenido, actualizada_en })
+}))
+
+app.post('/api/pizarras/:id/nodos', requireClaveApi, rutaPizarras((p, req) => p.anadir({
+  pizarra_id: exigirUuid(req.params.id, 'el id de la pizarra'),
+  nodos: req.body?.nodos,
+})))
 
 // ─── Instagram: conexión (Instagram Login) + métricas reales ──────────────────
 //
@@ -3293,17 +3354,20 @@ function recogerTextos(valor, destino) {
   else if (valor && typeof valor === 'object') for (const v of Object.values(valor)) recogerTextos(v, destino)
 }
 
-// Rutas que usa alguna publicación sin publicar (de Instagram o TikTok) o
-// alguna secuencia de historias. Si falla la lectura, lanza: sin la lista
-// entera de lo que se usa no se borra nada. Sin la migración 0049 la tabla de
-// TikTok no existe y no tiene nada que proteger: se salta.
+// Rutas que usa alguna publicación sin publicar (de Instagram o TikTok),
+// alguna secuencia de historias o alguna pizarra. Si falla la lectura, lanza:
+// sin la lista entera de lo que se usa no se borra nada. Sin la migración 0049
+// (TikTok) o la 0054 (pizarras) su tabla no existe y no tiene nada que
+// proteger: se salta.
 async function rutasEnUsoBucket() {
   const enUso = new Set()
-  const tablas = [['instagram_publicaciones', 'estado, archivos, portada_ruta'], ['historias_secuencias', 'historias'], ['tiktok_publicaciones', 'estado, archivos']]
+  const tablas = [['instagram_publicaciones', 'estado, archivos, portada_ruta'], ['historias_secuencias', 'historias'], ['tiktok_publicaciones', 'estado, archivos'], ['pizarras', 'contenido']]
+  const opcional = (tabla, error) => (tabla === 'tiktok_publicaciones' && esTablaTikTokInexistente(error))
+    || (tabla === 'pizarras' && (error.code === '42P01' || error.code === 'PGRST205'))
   for (const [tabla, campos] of tablas) {
     for (let desde = 0; ; desde += 1000) {
       const { data, error } = await supabaseAdmin.from(tabla).select(campos).range(desde, desde + 999)
-      if (error && tabla === 'tiktok_publicaciones' && esTablaTikTokInexistente(error)) break
+      if (error && opcional(tabla, error)) break
       if (error) throw new Error(`no se pudo leer ${tabla}: ${error.message}`)
       for (const fila of data) if (fila.estado !== 'publicado') recogerTextos(fila, enUso)
       if (data.length < 1000) break
@@ -4697,6 +4761,7 @@ console.log('  GET  /api/ping')
 console.log('  POST /api/pictures/lista-espera')
 console.log('  GET  /api/calendar-feed/:token.ics')
 console.log('  GET/POST /api/claves-api · DEL /api/claves-api/:id')
+console.log('  GET/POST /api/pizarras · POST /api/pizarras/subidas · GET/PUT /api/pizarras/:id · POST /api/pizarras/:id/nodos')
 console.log('  POST /mcp (MCP de Aify, clave de API)')
 
 app.listen(PORT, '0.0.0.0', () => {
