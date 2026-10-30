@@ -48,7 +48,7 @@ const C = {
 // (SVG con el texto en trazados), pintada en el azul de marca y rasterizada a
 // PNG con un canvas, porque jsPDF no entiende SVG. Se cachea el PNG tras la
 // primera exportación de la sesión.
-const MARCA_SVG = '/marca/marca-aify-claro.svg'
+const MARCA_SVG = '/marca/arroba-social-claro.svg'
 const MARCA_TINTA = '#1D1D1F' // color de la tinta en el SVG, que se cambia por el azul
 // viewBox del SVG (2903 × 1088, para un cuerpo de letra de 1000) y la línea
 // base del texto «Aify» dentro de él.
@@ -101,7 +101,7 @@ function drawMarcaAify(doc, x, y, cuerpo) {
     const ancho = alto * MARCA_VB.ancho / MARCA_VB.alto
     const top = y - alto * MARCA_VB.base / MARCA_VB.alto
     try {
-      doc.addImage(png, 'PNG', x, top, ancho, alto, 'marca-aify', 'FAST')
+      doc.addImage(png, 'PNG', x, top, ancho, alto, 'marca-social', 'FAST')
       return
     } catch (err) {
       console.warn('[exportPDF] No se pudo dibujar la marca:', err.message)

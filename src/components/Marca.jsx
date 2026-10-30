@@ -1,4 +1,5 @@
-// La marca de Aify («@ Aify», «@ Aify Social»…) como imagen. Los SVG de
+// La marca de las apps de Aify («@Social», «@Pictures», «@Film», y «@Aify» para la
+// familia) como imagen: la @ hace de «i», como en las apps de Apple. Los SVG de
 // public/marca/ llevan el texto convertido en trazados, así que no hace falta
 // cargar (ni redistribuir) la fuente con la que se dibujaron.
 //
@@ -10,13 +11,13 @@
 const ALTO_POR_PUNTO = 1.088
 
 const ARCHIVOS = {
-  Social: 'marca-aify-social',
-  Pictures: 'marca-aify-pictures',
-  Film: 'marca-aify-film',
+  Social: 'arroba-social',
+  Pictures: 'arroba-pictures',
+  Film: 'arroba-film',
 }
 
 function srcMarca(app, oscuro = false) {
-  const base = ARCHIVOS[app] || 'marca-aify'
+  const base = ARCHIVOS[app] || 'arroba-aify'
   return `/marca/${base}-${oscuro ? 'oscuro' : 'claro'}.svg`
 }
 
@@ -24,7 +25,7 @@ export default function Marca({ app, oscuro = false, tamano = 17, style }) {
   return (
     <img
       src={srcMarca(app, oscuro)}
-      alt={app ? `Aify ${app}` : 'Aify'}
+      alt={app ? `@${app}` : 'Aify'}
       style={{ display: 'block', height: Math.round(tamano * ALTO_POR_PUNTO * 10) / 10, width: 'auto', flexShrink: 0, ...style }}
     />
   )

@@ -120,7 +120,7 @@ function Navbar({ onLogin, onRegister, onApp, isLoggedIn }) {
       }}>
         {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <Marca app="Social" oscuro={!scrolled} tamano={17} />
+          <Marca app="Social" oscuro={!scrolled} tamano={24} />
         </div>
         {/* Desktop nav */}
         <div className="landing-desktop-nav" style={{ display: 'flex', gap: 28 }}>
@@ -512,7 +512,7 @@ function Gratis({ onRegister }) {
             Gratis y de código abierto
           </h2>
           <p style={{ fontSize: 17, color: INK_SOFT, marginBottom: 28, maxWidth: 560, marginLeft: 'auto', marginRight: 'auto' }}>
-            Aify Social no cobra nada. Sigo construyéndolo en abierto durante la beta, y cualquiera puede usarlo entero.
+            @Social no cobra nada. Sigo construyéndolo en abierto durante la beta, y cualquiera puede usarlo entero.
           </p>
           <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 10, textAlign: 'left', marginBottom: 32 }}>
             {puntos.map(p => (

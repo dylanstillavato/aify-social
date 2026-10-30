@@ -534,7 +534,7 @@ function SeccionEquipo({ org }) {
 // ── Main ───────────────────────────────────────────────────────────────────────
 
 // ── Tu IA ────────────────────────────────────────────────────────────────────
-// En Aify Social la IA la pone cada usuario, de dos maneras y sin pedir nunca
+// En @Social la IA la pone cada usuario, de dos maneras y sin pedir nunca
 // la contraseña de Claude ni de ChatGPT:
 // - TarjetaConectaTuPlan: su Claude o su ChatGPT, con su plan, trabaja con los
 //   datos de Aify por el MCP (claves aify_, /api/claves-api, docs/mcp.md).
@@ -588,7 +588,7 @@ function SeccionTuIa({ org, onGuardado }) {
     >
       <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.3px', margin: 0 }}>Tu IA</h2>
       <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '4px 0 0', lineHeight: 1.5 }}>
-        Aify Social es gratis: la IA la pones tú. Conecta tu Claude o tu ChatGPT con tu plan, o añade tu clave de API para los botones de IA. Aify nunca te pide la contraseña de Claude ni de ChatGPT.
+        @Social es gratis: la IA la pones tú. Conecta tu Claude o tu ChatGPT con tu plan, o añade tu clave de API para los botones de IA. Aify nunca te pide la contraseña de Claude ni de ChatGPT.
       </p>
       <TarjetaConectaTuPlan onGuardado={onGuardado} />
       <TarjetaClaveApi org={org} onGuardado={onGuardado} />

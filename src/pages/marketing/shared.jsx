@@ -44,7 +44,7 @@ export function MarketingNavbar() {
     <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(14px) saturate(160%)', WebkitBackdropFilter: 'blur(14px) saturate(160%)', borderBottom: '1px solid rgba(11,11,15,0.07)' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '14px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-          <Marca tamano={17} />
+          <Marca tamano={24} />
         </a>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <a href="/login" style={{ padding: '8px 14px', borderRadius: 20, fontSize: 13.5, fontWeight: 500, color: INK_SOFT, textDecoration: 'none', fontFamily: FONT }}>

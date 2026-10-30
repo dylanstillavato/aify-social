@@ -31,7 +31,7 @@ const PAGES = {
 }
 
 const TITLES = {
-  '/': 'Aify Social — Contenido con IA para agencias de marketing',
+  '/': '@Social — Contenido con IA para agencias de marketing',
   '/demo': 'Aify — Herramientas para quien crea contenido',
   '/agencias': 'Cómo una agencia atiende 10 clientes sin contratar más gente | Aify',
   '/checklist': '5 errores que colapsan el calendario de contenido de una agencia | Aify',
@@ -47,7 +47,7 @@ const TITLES = {
 
 const DESCRIPTIONS = {
   '/': 'Aify centraliza el contenido de tus clientes con IA: calendario, copies, guiones e ideas en un solo sitio. Prueba 30 días gratis, sin invitación.',
-  '/demo': 'Aify es una familia de apps para gestores de redes y creadores: Aify Social (el CRM) y Aify Pictures (editor de imágenes de código abierto), sobre un mismo motor.',
+  '/demo': 'Aify es una familia de apps para gestores de redes y creadores: @Social (el CRM) y @Pictures (editor de imágenes de código abierto), sobre un mismo motor.',
   '/agencias': 'Cómo una agencia de contenido atiende 3x más clientes sin contratar: calendario multi-cliente + generación con IA. Prueba 30 días gratis.',
   '/checklist': 'Los 5 errores que hacen colapsar el calendario de contenido de una agencia con varios clientes — y cómo evitarlos.',
   '/privacidad': 'Qué datos trata Aify, con qué proveedores y cómo ejercer tus derechos.',
