@@ -8,6 +8,7 @@ import crypto from 'node:crypto'
 import { Readable } from 'node:stream'
 import { montarMcp } from './mcp/servidor.js'
 import { crearPizarras, ErrorPizarra } from './mcp/pizarras.js'
+import { crearOAuthMcp } from './mcp/oauth.js'
 import * as z from 'zod'
 
 dotenv.config()
@@ -46,6 +47,10 @@ app.use('/api/pizarras', cors({
   origin: ORIGENES_MCP,
   allowedHeaders: ['Authorization', 'Content-Type'],
 }))
+// OAuth del MCP (mcp/oauth.js): claude.ai, ChatGPT y las apps de escritorio
+// leen los metadatos y piden tokens desde cualquier origen. Va antes del cors
+// global para que el preflight OPTIONS no se quede sin cabeceras.
+app.use(['/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource', '/token', '/register', '/revoke'], cors())
 // La lista de espera de la landing de Aify Pictures (POST /api/pictures/lista-espera)
 // solo se llama desde Pictures; va aquí por la misma razón (el preflight).
 app.use('/api/pictures/lista-espera', cors({ origin: ORIGENES_PICTURES }))
@@ -1289,18 +1294,84 @@ app.delete('/api/claves-api/:id', requireAuth, async (req, res) => {
   res.json({ ok: true })
 })
 
-// Autentica las peticiones del MCP con una clave de API. Deja en req
-// organizacionId (todas las consultas del MCP deben filtrar por ella) y
-// userId (quien creó la clave). Rechaza claves revocadas y las de usuarios
-// que ya no son de la organización.
+// ── OAuth del MCP (mcp/oauth.js, 0055_oauth_mcp.sql) ──────────────────────────
+// Para conectar Aify desde claude.ai, Claude Desktop o ChatGPT con solo la URL
+// de /mcp. URL_SERVIDOR es la URL pública de este servidor (emisor de OAuth):
+// AIFY_BACKEND_URL o, sin ella, el origen de INSTAGRAM_REDIRECT_URI.
+const URL_SERVIDOR = (() => {
+  const candidata = process.env.AIFY_BACKEND_URL || process.env.INSTAGRAM_REDIRECT_URI
+  try { return candidata ? new URL(candidata).origin : `http://localhost:${process.env.PORT || 3011}` } catch { return `http://localhost:${process.env.PORT || 3011}` }
+})()
+const URL_MCP = `${URL_SERVIDOR}/mcp`
+
+let oauthMcp = null
+if (supabaseAdmin) {
+  try {
+    oauthMcp = crearOAuthMcp({ supabaseAdmin, urlMcp: URL_MCP, urlServidor: URL_SERVIDOR, urlFrontend: FRONTEND_ORIGINS[0] || 'http://localhost:5174', miembroDeOrganizacion })
+    oauthMcp.montar(app)
+  } catch (err) {
+    // El SDK exige https fuera de localhost: sin URL pública buena, sin OAuth (las claves aify_ siguen)
+    console.error('[oauth-mcp] OAuth desactivado:', err.message)
+    oauthMcp = null
+  }
+}
+
+// Pantalla «Permitir» del frontend (src/pages/AutorizarMcp.jsx), con la sesión de Supabase
+const respuestaOAuth = (fn) => async (req, res) => {
+  if (!oauthMcp) return res.status(503).json({ error: 'La conexión con OAuth no está disponible en este servidor.' })
+  try {
+    res.json(await fn(req))
+  } catch (err) {
+    if (!err.estado) console.error('[oauth-mcp] error inesperado:', err.message)
+    res.status(err.estado || 500).json({ error: err.estado ? err.message : 'Error inesperado. Inténtalo de nuevo.' })
+  }
+}
+
+app.get('/api/oauth-mcp/solicitudes/:id', requireAuth, respuestaOAuth(req => oauthMcp.verSolicitud(req.params.id, req.userId)))
+app.post('/api/oauth-mcp/solicitudes/:id', requireAuth, respuestaOAuth(req => oauthMcp.responderSolicitud(req.params.id, req.userId, req.body?.permitir === true)))
+
+// Apps conectadas con OAuth (Configuración → Tu IA). Desconectar: quien la
+// conectó o el owner/admin de la organización, como con las claves.
+app.get('/api/oauth-mcp/apps', requireAuth, respuestaOAuth(async (req) => {
+  const miembro = await miembroDeOrganizacion(req.userId)
+  if (!miembro) throw Object.assign(new Error('No se encontró tu organización'), { estado: 400 })
+  return oauthMcp.listarApps(miembro.organizacion_id)
+}))
+app.delete('/api/oauth-mcp/apps/:id', requireAuth, respuestaOAuth(async (req) => {
+  const miembro = await miembroDeOrganizacion(req.userId)
+  if (!miembro) throw Object.assign(new Error('No se encontró tu organización'), { estado: 400 })
+  const conexion = await oauthMcp.datosApp(req.params.id, miembro.organizacion_id)
+  if (conexion.user_id !== req.userId && !ROLES_ADMIN_ORGANIZACION.includes(miembro.rol)) {
+    throw Object.assign(new Error('Solo quien la conectó o el propietario de la organización puede desconectarla'), { estado: 403 })
+  }
+  await oauthMcp.revocarApp(conexion.id, miembro.organizacion_id)
+  return { ok: true }
+}))
+
+// Autentica las peticiones del MCP con una clave de API (aify_...) o con un
+// token de OAuth. Deja en req organizacionId (todas las consultas del MCP
+// deben filtrar por ella) y userId (quien creó la clave o autorizó la app).
+// Rechaza claves y tokens revocados y los de usuarios que ya no son de la
+// organización. Los 401 llevan WWW-Authenticate con los metadatos de OAuth,
+// para que claude.ai y ChatGPT sepan dónde pedir el token.
 const INTERVALO_ULTIMO_USO_MS = 60 * 1000
+
+function noAutorizado(res, mensaje, errorOAuth) {
+  if (oauthMcp) {
+    const partes = [`Bearer resource_metadata="${oauthMcp.urlMetadatosRecurso}"`, `scope="${oauthMcp.alcance}"`]
+    if (errorOAuth) partes.push(`error="invalid_token"`, `error_description="${errorOAuth}"`)
+    res.set('WWW-Authenticate', partes.join(', '))
+  }
+  return res.status(401).json({ error: mensaje })
+}
 
 async function requireClaveApi(req, res, next) {
   if (!supabaseAdmin) return res.status(503).json({ error: 'Base de datos no disponible en el servidor' })
   const authHeader = req.headers.authorization || ''
   const clave = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : ''
   if (!clave.startsWith(PREFIJO_CLAVE_API)) {
-    return res.status(401).json({ error: 'Falta la clave de API de Aify (Authorization: Bearer aify_...). Créala en Configuración.' })
+    if (clave && oauthMcp) return requireTokenOAuth(clave, req, res, next)
+    return noAutorizado(res, 'Falta la clave de API de Aify (Authorization: Bearer aify_...). Créala en Configuración, o conecta Aify con OAuth.')
   }
 
   const { data: fila, error } = await supabaseAdmin
@@ -1329,6 +1400,34 @@ async function requireClaveApi(req, res, next) {
     supabaseAdmin.from('claves_api').update({ ultimo_uso_en: new Date().toISOString() }).eq('id', fila.id)
       .then(({ error: errorUso }) => { if (errorUso) console.error('[requireClaveApi] error guardando el último uso:', errorUso.message) })
   }
+  next()
+}
+
+// Token de OAuth (mcp/oauth.js): válido, sin caducar ni revocar, emitido para
+// este MCP y de alguien que sigue en la organización a la que dio acceso.
+async function requireTokenOAuth(token, req, res, next) {
+  let info
+  try {
+    info = await oauthMcp.provider.verifyAccessToken(token)
+  } catch (err) {
+    if (err.errorCode === 'server_error') {
+      if (/0055/.test(err.message)) return res.status(503).json({ error: err.message })
+      return res.status(500).json({ error: 'No se pudo comprobar el token' })
+    }
+    return noAutorizado(res, 'Token no válido, caducado o revocado. Vuelve a conectar Aify.', 'Token no valido o caducado')
+  }
+  if (info.resource && !oauthMcp.esDeEsteRecurso(info.resource)) {
+    return noAutorizado(res, 'Este token no es para el MCP de Aify.', 'Token emitido para otro recurso')
+  }
+  const { organizacionId, userId, tokenId } = info.extra
+  if (!(await oauthMcp.sigueEnLaOrganizacion(userId, organizacionId))) {
+    return noAutorizado(res, 'Quien conectó esta app ya no está en la organización. Vuelve a conectar Aify.', 'Usuario fuera de la organizacion')
+  }
+  req.organizacionId = organizacionId
+  req.userId = userId
+  req.oauthTokenId = tokenId
+  req.auth = info
+  oauthMcp.apuntarUso(info)
   next()
 }
 
@@ -4762,7 +4861,9 @@ console.log('  POST /api/pictures/lista-espera')
 console.log('  GET  /api/calendar-feed/:token.ics')
 console.log('  GET/POST /api/claves-api · DEL /api/claves-api/:id')
 console.log('  GET/POST /api/pizarras · POST /api/pizarras/subidas · GET/PUT /api/pizarras/:id · POST /api/pizarras/:id/nodos')
-console.log('  POST /mcp (MCP de Aify, clave de API)')
+console.log('  GET/POST /api/oauth-mcp/solicitudes/:id · GET /api/oauth-mcp/apps · DEL /api/oauth-mcp/apps/:id')
+console.log('  OAuth del MCP: /.well-known/oauth-authorization-server · /.well-known/oauth-protected-resource/mcp · /authorize · /token · /register · /revoke')
+console.log('  POST /mcp (MCP de Aify, clave de API o token de OAuth)')
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`\nAify proxy corriendo en http://localhost:${PORT}`)

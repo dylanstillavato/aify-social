@@ -6,6 +6,8 @@ services:
     buildCommand: npm install
     startCommand: node server.js
     envVars:
+      - key: AIFY_BACKEND_URL
+        value: https://aify-backend.onrender.com
       - key: AI_KEYS_SECRET
         sync: false
       - key: VITE_SUPABASE_URL
