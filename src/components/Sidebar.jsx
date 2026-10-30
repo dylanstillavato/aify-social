@@ -12,7 +12,7 @@ import { useTheme } from '../context/ThemeContext'
 import { useTareasList } from '../hooks/useTareas'
 import { fechaVencimiento, hoyISO } from '../utils/vencimiento'
 import { useClientesList } from '../hooks/useClientes'
-import faviconIcon from '../assets/favicon-icon.png'
+import Marca from './Marca'
 import { abrirPaletaComandos } from './paletaComandosAcciones'
 import { useEsMovil } from '../hooks/useEsMovil'
 
@@ -296,8 +296,7 @@ export default function Sidebar({ abierto = false, onCerrar }) {
       {/* Logo */}
       <div style={{ padding: '28px 20px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <img src={faviconIcon} alt="Aify" style={{ width: 32, height: 32, borderRadius: 8, filter: theme === 'dark' ? 'invert(1)' : 'none' }} />
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: 'var(--text-primary)', lineHeight: 1 }}>Aify <span style={{ color: 'var(--text-secondary)' }}>Social</span></span>
+          <Marca app="Social" oscuro={theme === 'dark'} tamano={22} />
         </div>
       </div>
 

@@ -15,7 +15,7 @@ métricas sin abrir el navegador.
 
 ## Conectarlo
 
-Desde el navegador (Aify Pictures), `/mcp` acepta CORS de la web de Aify y de
+Desde el navegador (@Pictures), `/mcp` acepta CORS de la web de Aify y de
 `AIFY_PICTURES_ORIGINS` (por defecto `https://pictures.useaify.app`,
 `http://localhost:5173` y `http://localhost:4173`); la clave sigue siendo obligatoria.
 

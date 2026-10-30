@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { BadgeCheck, FileSignature, Plus, UserPlus } from 'lucide-react'
 import { useNumeroUsuario } from '../hooks/useNumeroUsuario'
+import Marca from './Marca'
 
 // Tarjeta de saludo del Inicio: saludo según la hora, frase del día y, para
 // los primeros 50 usuarios, el reverso con su número de socio fundador al
@@ -155,7 +156,7 @@ export default function TarjetaSaludo({ user, sinClientes, children, onNuevoPres
             <div style={{ position: 'relative', zIndex: 1, height: '100%', padding: '26px 30px 22px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxSizing: 'border-box' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <span style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.65)' }}>Eres nuestro usuario</span>
-                <span style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, color: 'white', letterSpacing: '-0.3px' }}>Aify</span>
+                <Marca oscuro tamano={20} />
               </div>
               <div style={{
                 fontSize: 46, fontWeight: 800, letterSpacing: '-1px', lineHeight: 1,

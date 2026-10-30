@@ -45,7 +45,7 @@ typography:
     fontWeight: 700
     letterSpacing: "0.6px"
   logotype:
-    fontFamily: "Super Jello"
+    fontFamily: "none (SVG con el texto en trazados, public/marca/)"
     fontSize: "17px"
     fontWeight: 400
 rounded:
@@ -122,9 +122,12 @@ del azul + lima en cada superficie pública.
 ## Typography
 
 Tipografía de sistema (`-apple-system`/SF Pro) en absolutamente todo el
-texto de producto — títulos, cuerpo, botones, formularios. **"Super Jello"
-es exclusivamente para el logotipo "Aify"** (`logotype`, arriba), nunca para
-titulares ni CTAs; usarla en un H1 rompe la marca real.
+texto de producto — títulos, cuerpo, botones, formularios. **El logotipo
+"Aify" es una imagen**: los SVG de `public/marca/` (texto en trazados, sin
+fuente; componente `src/components/Marca.jsx`), con `tamano` = el cuerpo que
+tendría el texto (`logotype`, arriba). La fuente display (`--font-display`,
+Fredoka, OFL) es solo para los pocos acentos que no son el logo; nunca para
+titulares ni CTAs.
 
 - `h1`: hero de páginas públicas — `clamp(32px, 5.2vw, 52px)`, 700,
   letter-spacing negativo (`-1.5px`) para compactar el trazo a ese tamaño.
@@ -178,7 +181,7 @@ producción (`src/pages/marketing/shared.jsx`): `button-primary` (CTA lima),
   de pines de Pinterest usó negro + tipografía Archivo Black, una paleta que
   no es la marca real de Aify, y hubo que rehacer los carruseles con los
   tokens correctos.
-- ❌ No uses "Super Jello" fuera del logotipo "Aify".
+- ❌ No escribas el logotipo "Aify" con una fuente: usa la marca SVG de `public/marca/`.
 - ❌ No añadas `box-shadow` difuso genérico — usa contraste de color plano
   (ver Elevation & Depth).
 

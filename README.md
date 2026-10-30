@@ -1,14 +1,16 @@
-<h1 align="center">Aify Social</h1>
+<h1 align="center">@Social</h1>
+
+<p align="center"><i>Antes «Aify Social». Las apps de Aify llevan la @ delante, como la «i» de las de Apple.</i></p>
 
 <p align="center">
   <b>El CRM gratis y de código abierto para gestores de redes.</b><br>
   Clientes, ideas, guiones, calendario, publicación en Instagram y TikTok y métricas, con la memoria de cada marca.<br>
-  <a href="https://www.useaify.app">useaify.app</a> · parte de la familia <a href="https://www.useaify.app/demo">Aify</a> · <a href="https://github.com/dylanstillavato/aify-pictures">Aify Pictures</a>
+  <a href="https://www.useaify.app">useaify.app</a> · parte de la familia <a href="https://www.useaify.app/demo">Aify</a> · <a href="https://github.com/dylanstillavato/aify-pictures">@Pictures</a>
 </p>
 
 ## Qué es
 
-Aify Social es la app que usamos para llevar las redes de nuestros clientes. Tiene:
+@Social es la app que usamos para llevar las redes de nuestros clientes. Tiene:
 
 - **Clientes:** una ficha por marca, con su tono, su sector, su público, lo prohibido y sus competidores.
 - **Ideas y guiones:** lluvia de ideas y guiones de reels con gancho, desarrollo y cierre.
@@ -48,4 +50,4 @@ Es de código abierto para mejorarlo entre todos los que lo usan:
 
 [AGPL-3.0](LICENSE). Puedes usarlo, cambiarlo y montarlo para ti o para tus clientes. Si lo ofreces como servicio a otros, tienes que publicar tus cambios con la misma licencia.
 
-Copyright © 2026 Aify y los colaboradores de Aify Social.
+Copyright © 2026 Aify y los colaboradores de @Social.

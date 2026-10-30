@@ -6,7 +6,7 @@ import { useTheme } from '../context/ThemeContext'
 import { supabase } from '../services/supabase'
 import { markOnboardingCompleto } from '../utils/onboarding'
 import { guardarModoCobroDesdeOnboarding } from '../hooks/useOrganizacion'
-import faviconIcon from '../assets/favicon-icon.png'
+import Marca from '../components/Marca'
 import {
   ArrowRight, ArrowLeft, Check,
   Megaphone, TrendingUp, Image, Search, Star, Code,
@@ -634,8 +634,7 @@ function Logo() {
   const { theme } = useTheme()
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 48 }}>
-      <img src={faviconIcon} alt="Aify" style={{ width: 32, height: 32, borderRadius: 10, filter: theme === 'dark' ? 'invert(1)' : 'none' }} />
-      <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: 'var(--text-primary)', lineHeight: 1 }}>Aify</span>
+      <Marca oscuro={theme === 'dark'} tamano={22} />
     </div>
   )
 }

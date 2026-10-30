@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Check, ArrowRight } from 'lucide-react'
 import { supabase, hasSupabase } from '../../services/supabase'
-import faviconIcon from '../../assets/favicon-icon.png'
+import Marca from '../../components/Marca'
 
 // ── Design tokens compartidos con Landing.jsx ───────────────────────────────
 // Landing.jsx no exporta sus constantes, así que se duplican aquí a
@@ -44,8 +44,7 @@ export function MarketingNavbar() {
     <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(14px) saturate(160%)', WebkitBackdropFilter: 'blur(14px) saturate(160%)', borderBottom: '1px solid rgba(11,11,15,0.07)' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '14px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-          <img src={faviconIcon} alt="Aify" style={{ width: 26, height: 26, borderRadius: 7 }} />
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: 17, color: INK, lineHeight: 1 }}>Aify</span>
+          <Marca tamano={24} />
         </a>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <a href="/login" style={{ padding: '8px 14px', borderRadius: 20, fontSize: 13.5, fontWeight: 500, color: INK_SOFT, textDecoration: 'none', fontFamily: FONT }}>
@@ -65,8 +64,7 @@ export function MarketingFooter() {
     <footer style={{ background: INK, padding: '48px 24px 36px' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
         <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-          <img src={faviconIcon} alt="Aify" style={{ width: 22, height: 22, filter: 'invert(1) brightness(1.6)' }} />
-          <span style={{ fontSize: 15, fontWeight: 700, color: 'white' }}>Aify</span>
+          <Marca oscuro tamano={15} />
         </a>
         <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>© 2026 Aify · En fase beta</span>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>

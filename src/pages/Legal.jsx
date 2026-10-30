@@ -155,7 +155,7 @@ export function Terminos() {
         <p>Eres responsable de la actividad de tu cuenta y de los miembros que invites a tu organización. Mantén tu contraseña a salvo.</p>
       </Seccion>
       <Seccion titulo="Precio">
-        <p>Aify Social es gratis y de código abierto. No hay planes de pago ni se pide tarjeta.</p>
+        <p>@Social es gratis y de código abierto. No hay planes de pago ni se pide tarjeta.</p>
       </Seccion>
       <Seccion titulo="Tu contenido y el contenido generado con IA">
         <p>Lo que subes y lo que generas con Aify es tuyo. Nos das permiso solo para almacenarlo y procesarlo en la medida necesaria para prestarte el servicio.</p>
