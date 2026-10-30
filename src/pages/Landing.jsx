@@ -9,7 +9,7 @@ import {
   FlaskConical, TrendingUp, Search,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import faviconIcon from '../assets/favicon-icon.png'
+import Marca from '../components/Marca'
 import { Reveal, Magnetic, BenefitRow, CalendarioMockup, GenericMockup, FloatingCard } from './marketing/piezasLanding'
 
 // ── Design tokens ────────────────────────────────────────────────────────────
@@ -120,10 +120,7 @@ function Navbar({ onLogin, onRegister, onApp, isLoggedIn }) {
       }}>
         {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <img src={faviconIcon} alt="Aify" style={{ width: 26, height: 26, borderRadius: 7, filter: scrolled ? 'none' : 'invert(1) brightness(1.6)' }} />
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: 17, color: scrolled ? INK : 'rgba(255,255,255,0.92)', lineHeight: 1, whiteSpace: 'nowrap', transition: 'color 0.3s' }}>
-            Aify <span style={{ color: scrolled ? INK_SOFT : 'rgba(255,255,255,0.7)', transition: 'color 0.3s' }}>Social</span>
-          </span>
+          <Marca app="Social" oscuro={!scrolled} tamano={17} />
         </div>
         {/* Desktop nav */}
         <div className="landing-desktop-nav" style={{ display: 'flex', gap: 28 }}>
@@ -623,8 +620,7 @@ function Footer({ onLogin }) {
         <div className="landing-footer-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 40, marginBottom: 48 }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <img src={faviconIcon} alt="Aify" style={{ width: 24, height: 24, filter: 'invert(1) brightness(1.6)' }} />
-              <span style={{ fontSize: 18, fontWeight: 700, color: 'white', letterSpacing: '-0.4px' }}>Aify <span style={{ color: 'rgba(255,255,255,0.55)' }}>Social</span></span>
+              <Marca app="Social" oscuro tamano={18} />
             </div>
             <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.45)', lineHeight: 1.6, marginBottom: 20, maxWidth: 280 }}>
               IA para centralizar el contenido de marketing de tus clientes. Proyecto en fase beta.

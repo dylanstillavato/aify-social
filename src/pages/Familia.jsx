@@ -130,13 +130,10 @@ function Navbar() {
   )
 }
 
-// Las tejas de las apps (iniciales de la familia, con su punto) que flotan en el hero.
-function TejaApp({ letra, fondo, tinta, punto }) {
+// Las tejas de las apps (inicial de la app con su punto, en SVG) que flotan en el hero.
+function TejaApp({ src, alt }) {
   return (
-    <div style={{ width: 64, height: 64, borderRadius: 18, background: fondo, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', boxShadow: '0 16px 40px rgba(11,11,15,0.25)' }}>
-      <span style={{ fontFamily: 'var(--font-display)', fontSize: 38, color: tinta, lineHeight: 1 }}>{letra}</span>
-      <span style={{ position: 'absolute', right: 9, bottom: 9, width: 11, height: 11, borderRadius: '50%', background: punto }} />
-    </div>
+    <img src={src} alt={alt} style={{ display: 'block', width: 64, height: 64, borderRadius: 18, boxShadow: '0 16px 40px rgba(11,11,15,0.25)' }} />
   )
 }
 
@@ -200,7 +197,7 @@ function Hero() {
           </div>
         </FloatingCard>
         <FloatingCard rotate={5} delay={0.35} style={{ left: '22%', top: -24 }}>
-          <TejaApp letra="S" fondo={LIME} tinta={INK} punto={INK} />
+          <TejaApp src="/marca/aify-social.svg" alt="Aify Social" />
         </FloatingCard>
         <FloatingCard rotate={-3} delay={0.1} style={{ left: '38%', top: 20, width: 150 }}>
           <div style={{ background: INK, borderRadius: 14, padding: '16px 18px', boxShadow: '0 16px 40px rgba(11,11,15,0.3)' }}>
@@ -209,7 +206,7 @@ function Hero() {
           </div>
         </FloatingCard>
         <FloatingCard rotate={6} delay={0.45} style={{ left: '60%', top: -26 }}>
-          <TejaApp letra="P" fondo={SKY_DEEP} tinta="white" punto={LIME} />
+          <TejaApp src="/marca/aify-pictures.svg" alt="Aify Pictures" />
         </FloatingCard>
         <FloatingCard rotate={-5} delay={0.25} style={{ left: '76%', top: 18, width: 148 }}>
           <div style={{ background: LIME, borderRadius: 14, padding: '14px 16px', boxShadow: '0 16px 40px rgba(11,11,15,0.22)', display: 'flex', flexDirection: 'column', gap: 6 }}>

@@ -1,13 +1,5 @@
 @import "tailwindcss";
 
-@font-face {
-  font-family: 'Super Jello';
-  src: url('./assets/fonts/SuperJello.ttf') format('truetype');
-  font-weight: normal;
-  font-style: normal;
-  font-display: swap;
-}
-
 :root {
   --bg-primary: #FFFFFF;
   --bg-secondary: #F5F5F7;
@@ -28,7 +20,7 @@
   --brand-blue-2: #3D9BFF;
   --brand-blue-3: #7CC0FF;
   --brand-blue-4: #B0E0E6;
-  --font-display: 'Super Jello', 'SF Pro Display', sans-serif;
+  --font-display: 'Fredoka', 'SF Pro Display', sans-serif;
   --accent-lime-hover: #BEE62A;
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
   --shadow-md: 0 4px 16px rgba(0,0,0,0.08);

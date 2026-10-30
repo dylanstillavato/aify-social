@@ -1,5 +1,4 @@
 import jsPDF from 'jspdf'
-import superJelloUrl from '../assets/fonts/SuperJello.ttf'
 import { hexARgb } from '../utils/colorMarca'
 import { encajarEnCaja } from '../utils/fotoCliente'
 import { esCarrusel } from '../utils/formato'
@@ -44,42 +43,74 @@ const C = {
   white:      [255, 255, 255],
 }
 
-// ── Fuente de marca (Super Jello) ───────────────────────────────────────────
-// jsPDF no trae fuentes personalizadas — hay que registrar el .ttf real como
-// VFS + addFont() en cada instancia de jsPDF. Se cachea el base64 tras la
-// primera exportación para no volver a descargar/convertir el archivo en
-// cada PDF generado dentro de la misma sesión de la app.
-let _superJelloBase64Promise = null
+// ── Logo de marca («@ Aify» en imagen) ──────────────────────────────────────
+// El logo no se escribe con una fuente: se dibuja la marca de public/marca/
+// (SVG con el texto en trazados), pintada en el azul de marca y rasterizada a
+// PNG con un canvas, porque jsPDF no entiende SVG. Se cachea el PNG tras la
+// primera exportación de la sesión.
+const MARCA_SVG = '/marca/marca-aify-claro.svg'
+const MARCA_TINTA = '#1D1D1F' // color de la tinta en el SVG, que se cambia por el azul
+// viewBox del SVG (2903 × 1088, para un cuerpo de letra de 1000) y la línea
+// base del texto «Aify» dentro de él.
+const MARCA_VB = { ancho: 2903, alto: 1088, base: 834 }
+const MARCA_ALTO_PX = 240
+let _marcaPngPromise = null
+const _marcaPorDoc = new WeakMap()
 
-async function fetchSuperJelloBase64() {
-  if (!_superJelloBase64Promise) {
-    _superJelloBase64Promise = fetch(superJelloUrl)
-      .then(res => res.arrayBuffer())
-      .then(buf => {
-        let binary = ''
-        const bytes = new Uint8Array(buf)
-        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
-        return btoa(binary)
+function rgbAHex(rgb) {
+  return '#' + rgb.map(v => v.toString(16).padStart(2, '0')).join('')
+}
+
+function cargarMarcaPng() {
+  if (!_marcaPngPromise) {
+    _marcaPngPromise = fetch(MARCA_SVG)
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return res.text()
       })
+      .then(svg => new Promise((resolve, reject) => {
+        const img = new Image()
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          canvas.height = MARCA_ALTO_PX
+          canvas.width = Math.round(MARCA_ALTO_PX * MARCA_VB.ancho / MARCA_VB.alto)
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+          resolve(canvas.toDataURL('image/png'))
+        }
+        img.onerror = () => reject(new Error('no se pudo dibujar el SVG'))
+        const azul = svg.split(MARCA_TINTA).join(rgbAHex(C.blue))
+        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(azul)
+      }))
       .catch(err => {
-        console.warn('[exportPDF] No se pudo cargar Super Jello, se usa helvetica de reserva:', err.message)
-        _superJelloBase64Promise = null // permite reintentar en la próxima exportación
+        console.warn('[exportPDF] No se pudo cargar la marca, se usa helvetica de reserva:', err.message)
+        _marcaPngPromise = null // permite reintentar en la próxima exportación
         return null
       })
   }
-  return _superJelloBase64Promise
+  return _marcaPngPromise
 }
 
-// Aplica la fuente de marca al wordmark "Aify" — newDoc() ya la registró en
-// el documento si la carga tuvo éxito; si no (offline, bloqueo de red...),
-// jsPDF no tiene una fuente "SuperJello" registrada y cae a helvetica en
-// negrita sin romper el PDF.
-function setFontAify(doc, style = 'bold') {
-  try {
-    doc.setFont('SuperJello', 'normal')
-  } catch {
-    doc.setFont('helvetica', style)
+// Dibuja el logo «@ Aify» con el borde izquierdo en `x` y la línea base del
+// texto en `y`; el texto sale del mismo tamaño que a `cuerpo` puntos. Si la
+// imagen no se pudo preparar (offline, bloqueo de red...), escribe «Aify» en
+// helvetica negrita sin romper el PDF.
+function drawMarcaAify(doc, x, y, cuerpo) {
+  const png = _marcaPorDoc.get(doc)
+  if (png) {
+    const alto = cuerpo * (25.4 / 72) * (MARCA_VB.alto / 1000)
+    const ancho = alto * MARCA_VB.ancho / MARCA_VB.alto
+    const top = y - alto * MARCA_VB.base / MARCA_VB.alto
+    try {
+      doc.addImage(png, 'PNG', x, top, ancho, alto, 'marca-aify', 'FAST')
+      return
+    } catch (err) {
+      console.warn('[exportPDF] No se pudo dibujar la marca:', err.message)
+    }
   }
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(cuerpo)
+  doc.setTextColor(...C.blue)
+  doc.text('Aify', x, y)
 }
 
 const NET_COLORS = {
@@ -139,10 +170,7 @@ function makePages(doc, clienteNombre) {
     },
 
     _drawHeader() {
-      setFontAify(doc)
-      doc.setFontSize(8)
-      doc.setTextColor(...C.blue)
-      doc.text('Aify', M, 12)
+      drawMarcaAify(doc, M, 12, 8)
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(7)
       doc.setTextColor(...C.lightGray)
@@ -253,7 +281,6 @@ function kitMarcaPortada(cliente) {
   // del cliente va en la línea de acento, junto a su logo.
   const logo = typeof iv.logo === 'string' && /^data:image\/(png|jpe?g);base64,/i.test(iv.logo) ? iv.logo : null
   return {
-    texto: C.blue,
     linea: primario || C.lime,
     logo,
   }
@@ -279,13 +306,10 @@ function drawLogoCliente(doc, logo, top) {
 function drawCover(doc, cliente, subtitulo, { marca = false } = {}) {
   cliente = cliente || {}
   let y = M + 10
-  const kit = marca ? kitMarcaPortada(cliente) : { texto: C.blue, linea: C.lime, logo: null }
+  const kit = marca ? kitMarcaPortada(cliente) : { linea: C.lime, logo: null }
 
-  // Logo wordmark
-  setFontAify(doc)
-  doc.setFontSize(20)
-  doc.setTextColor(...kit.texto)
-  doc.text('Aify', M, y)
+  // Logo (siempre en el azul de marca)
+  drawMarcaAify(doc, M, y, 20)
 
   // Logo del cliente (arriba a la derecha); si es alto, baja la línea de acento
   const logoBottom = drawLogoCliente(doc, kit.logo, M - 2)
@@ -1411,11 +1435,8 @@ export async function exportarPresupuesto(cliente, presupuesto) {
 
 async function newDoc() {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-  const base64 = await fetchSuperJelloBase64()
-  if (base64) {
-    doc.addFileToVFS('SuperJello.ttf', base64)
-    doc.addFont('SuperJello.ttf', 'SuperJello', 'normal')
-  }
+  const marca = await cargarMarcaPng()
+  if (marca) _marcaPorDoc.set(doc, marca)
   return doc
 }
 
