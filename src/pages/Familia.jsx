@@ -24,6 +24,7 @@ const URL_SOCIAL = '/login'
 const URL_PICTURES = 'https://pictures.useaify.app'
 const URL_EDITOR = 'https://pictures.useaify.app/app/'
 const URL_GITHUB_PICTURES = 'https://github.com/dylanstillavato/aify-pictures'
+const URL_GITHUB_SOCIAL = 'https://github.com/dylanstillavato/aify-social'
 
 const APPS = [
   {
@@ -472,7 +473,7 @@ function TuIA() {
 function CodigoAbierto() {
   const repos = [
     { app: 'Pictures', desc: 'Parte de PhotoCraft, el editor abierto del ArtCraft Team. Lo traducimos, lo adaptamos a redes y le añadimos Studio y Tu IA.', licencia: 'MIT o Apache-2.0', href: URL_GITHUB_PICTURES, cta: 'Ver el código' },
-    { app: 'Social', desc: 'El CRM entero: clientes, ideas, guiones, calendario, publicación y métricas. Lo publicamos para que cualquiera lo pueda revisar y mejorar.', licencia: 'AGPL-3.0', href: null, cta: 'Muy pronto en GitHub' },
+    { app: 'Social', desc: 'El CRM entero: clientes, ideas, guiones, calendario, publicación y métricas. Lo publicamos para que cualquiera lo pueda revisar y mejorar.', licencia: 'AGPL-3.0', href: URL_GITHUB_SOCIAL, cta: 'Ver el código' },
   ]
   return (
     <section id="codigo-abierto" style={{ padding: '96px 32px', background: SURFACE }}>
@@ -580,7 +581,7 @@ function LlamadaFinal() {
 function Pie() {
   const cols = [
     { title: 'Apps', links: [['Aify Social', '/'], ['Aify Pictures', URL_PICTURES]] },
-    { title: 'Código', links: [['Aify Pictures en GitHub', URL_GITHUB_PICTURES], ['PhotoCraft', 'https://github.com/storytold/photocraft']] },
+    { title: 'Código', links: [['Aify Social en GitHub', URL_GITHUB_SOCIAL], ['Aify Pictures en GitHub', URL_GITHUB_PICTURES], ['PhotoCraft', 'https://github.com/storytold/photocraft']] },
     { title: 'Legal', links: [['Privacidad', '/privacidad'], ['Términos', '/terminos'], ['Cookies', '/cookies']] },
   ]
   return (
