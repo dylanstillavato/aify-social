@@ -17,7 +17,7 @@ import faviconIcon from '../assets/favicon-icon.png'
 
 const PERMISOS = [
   { icono: Users, texto: 'Ver tus clientes, sus ideas, guiones, calendario y métricas' },
-  { icono: PenLine, texto: 'Crear ideas y posts, y leer y escribir tus pizarras de Aify Pictures' },
+  { icono: PenLine, texto: 'Crear ideas y posts, y leer y escribir tus pizarras de @Pictures' },
   { icono: CalendarDays, texto: 'Mover posts y programar publicaciones cuando se lo pidas' },
 ]
 

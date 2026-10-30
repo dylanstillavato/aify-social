@@ -75,7 +75,7 @@ Configuración → Tu IA:
   uso. «Desconectar» la corta al momento (su token deja de valer).
 - **Claves**: «Revocar» corta esa clave.
 
-Desde el navegador (Aify Pictures), `/mcp` y `/api/pizarras` aceptan CORS de la
+Desde el navegador (@Pictures), `/mcp` y `/api/pizarras` aceptan CORS de la
 web de Aify y de `AIFY_PICTURES_ORIGINS` (por defecto `https://pictures.useaify.app`,
 `http://localhost:5173` y `http://localhost:4173`); la clave sigue siendo obligatoria.
 
@@ -163,9 +163,9 @@ No hay herramientas para borrar clientes ni posts.
 Desde ahí, el proceso de publicación de `server.js` lo publica a su hora igual
 que lo programado desde la web.
 
-## Pizarras (Aify Pictures)
+## Pizarras (@Pictures)
 
-Aify Pictures Studio sube la pizarra de un proyecto (notas, referencias,
+@Pictures Studio sube la pizarra de un proyecto (notas, referencias,
 flechas, notas de voz, kit de marca) y la IA del usuario la lee y deja ahí lo
 que hace. Tabla `pizarras` (migración `0054_pizarras.sql`); la lógica está en
 `mcp/pizarras.js` y la comparten las herramientas y las rutas REST. Sin la
@@ -192,7 +192,7 @@ Aify guarda tal cual lo que no conoce del contenido.
 
 ### «Mira mi pizarra»
 
-1. En Aify Pictures, el usuario pulsa «Mira mi pizarra»: Studio guarda la
+1. En @Pictures, el usuario pulsa «Mira mi pizarra»: Studio guarda la
    pizarra en Aify y le da a su IA el `pizarra_id`.
 2. La IA llama a `ver_pizarra`: lee las notas, sigue las flechas y abre las
    imágenes, los vídeos y los audios con su `url`.
