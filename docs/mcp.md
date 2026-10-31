@@ -189,6 +189,7 @@ Aify guarda tal cual lo que no conoce del contenido.
 | `ver_pizarra` | `pizarra_id` | título, cliente, `actualizada_en` y contenido. Cada nodo con archivo trae `url`, una URL de lectura que caduca en 1 h. Solo se firman rutas de la carpeta `pizarras/` de su cliente |
 | `guardar_pizarra` | `cliente_id`, `pizarra_id?`, `titulo`, `contenido` | sin `pizarra_id` crea una pizarra; con él la sustituye entera. Devuelve `{ pizarra_id, actualizada_en }` |
 | `anadir_a_pizarra` | `pizarra_id`, `nodos[]` (máx. 20): `{ tipo: nota/imagen/video/audio, texto?, ruta?, cerca_de? }` | añade nodos sin borrar los que hay. Una nota lleva `texto`; imagen, vídeo y audio, la `ruta` de `pedir_subida` con destino `pizarra` (de esa organización y ese cliente). Con `cerca_de` (id de un nodo) el nuevo va a su derecha; si no, a la derecha de todo. Cada nodo nuevo lleva `id`, `autor: "claude"` y `creado_en`; el audio se guarda con el tipo `voz` de Studio. Devuelve los ids creados |
+| `ver_ias_conectadas` | — | las apps de IA con el conector de Aify conectado por OAuth a la organización (sin revocar ni caducar): `nombre` (el que dio la app al registrarse), `familia` (`claude`, `chatgpt` u `otra`), `conectada_en` y `ultimo_uso_en`. Lo usa «Tu IA» de @Pictures para enseñar qué está conectado. Sin la migración 0055 devuelve una lista vacía |
 
 ### «Mira mi pizarra»
 

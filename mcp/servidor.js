@@ -746,6 +746,40 @@ export function crearServidorMcp(dependencias, { organizacionId, userId }) {
     return { ok: true, cliente: cliente.nombre, post: { id: post.id, titulo: post.titulo, estado: 'publicado' } }
   }))
 
+  // ── IAs conectadas (Tu IA de @Pictures) ───────────────────────────────
+
+  servidor.registerTool('ver_ias_conectadas', {
+    title: 'Ver IAs conectadas',
+    description: 'Las apps de IA (Claude, ChatGPT…) que tienen el conector de Aify conectado a esta organización, con cuándo se conectaron y cuándo lo usaron por última vez. '
+      + 'Lo usa @Pictures para enseñar en «Tu IA» qué está conectado.',
+    annotations: { readOnlyHint: true },
+  }, herramienta('ver_ias_conectadas', async () => {
+    const { data, error } = await supabaseAdmin
+      .from('oauth_mcp_tokens')
+      .select('client_id, creado_en, ultimo_uso_en, refresh_caduca_en')
+      .eq('organizacion_id', organizacionId)
+      .is('revocado_en', null)
+      .order('creado_en', { ascending: false })
+    if (error?.code === '42P01' || error?.code === 'PGRST205') return { ias: [] } // sin la migración 0055
+    comprobar(error, 'las IAs conectadas')
+    const vivas = (data || []).filter(t => !t.refresh_caduca_en || new Date(t.refresh_caduca_en) > new Date())
+    const ids = [...new Set(vivas.map(t => t.client_id))]
+    const nombres = new Map()
+    if (ids.length) {
+      const { data: clientes } = await supabaseAdmin.from('oauth_mcp_clientes').select('client_id, nombre').in('client_id', ids)
+      for (const c of clientes || []) nombres.set(c.client_id, c.nombre)
+    }
+    const familia = nombre => (/claude|anthropic/i.test(nombre || '') ? 'claude' : /chatgpt|openai/i.test(nombre || '') ? 'chatgpt' : 'otra')
+    return {
+      ias: vivas.map(t => ({
+        nombre: nombres.get(t.client_id) || 'App sin nombre',
+        familia: familia(nombres.get(t.client_id)),
+        conectada_en: t.creado_en,
+        ultimo_uso_en: t.ultimo_uso_en,
+      })),
+    }
+  }))
+
   // ── Pizarras (@Pictures: «Mira mi pizarra») ──────────────────────────
 
   servidor.registerTool('listar_pizarras', {
@@ -759,7 +793,8 @@ export function crearServidorMcp(dependencias, { organizacionId, userId }) {
     title: 'Ver pizarra',
     description: 'Lee una pizarra de @Pictures («Mira mi pizarra»): título, cliente y contenido { nodos, flechas, apuntes }. '
       + 'Cada nodo tiene id, tipo, posición (x, y, ancho, alto) y datos. Tipos: nota (texto e indicaciones del usuario en datos.texto), '
-      + 'imagen (referencia o pieza), video, voz (nota de voz o audio), enlace (URL en datos.url), kit (kit de marca: colores, fuentes, logo). '
+      + 'imagen (referencia o pieza), video, voz (nota de voz o audio), enlace (URL en datos.url), kit (kit de marca: colores, fuentes, logo), '
+      + 'prompt y generador (pasos del modo flujo: lo que les llega por flechas son sus entradas; prompt lleva datos.instrucciones). '
       + 'Las flechas van de un nodo (desde) a otro (hasta), con texto opcional: léelas como «esto va con esto» o «haz esto con esto». '
       + 'Los apuntes son notas largas en markdown del proyecto. Los nodos con archivo traen "url": una URL de lectura que caduca en 1 hora, para ver la imagen o descargar el vídeo o el audio.',
     inputSchema: { pizarra_id: idSchema('id de la pizarra (de listar_pizarras o del enlace que da @Pictures)') },
