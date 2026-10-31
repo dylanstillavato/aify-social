@@ -30,7 +30,7 @@ No es una app que haya que instalar. Junta en una web las piezas que ya tenemos:
 |---|---|---|
 | **A. Tu Claude, en su web** | Cualquiera, también el gratis | El conector de Aify («Mira mi pizarra», MCP remoto) gana herramientas `film_*` y `pictures_*`. El usuario habla con su Claude en claude.ai, con sus artefactos y Claude Design, en otra pestaña o al lado. Claude lee la pizarra y edita @Film y @Pictures en vivo: las órdenes llegan al editor abierto por Supabase Realtime. Lo que hace se ve en azul |
 | **B. Chat dentro de @Film y de la pizarra** | Con clave de API | El usuario pega su clave de Anthropic (o de OpenAI o Gemini) en «Tu IA». El chat llama a la API desde el navegador, como ya hace «Pídeselo a la IA», con las herramientas del editor |
-| **C. Chat dentro, con el plan del usuario** | Pro o Max | Solo si Anthropic lo aprueba. Se pide en la fase 0. Hasta entonces, no |
+| **C. Tu Claude Code, con tu plan** (decidido el 2026-10-31) | Pro o Max | **Puente local.** El usuario pega `curl -fsSL …/instalar.sh \| bash` en la Terminal. Si falta, se instala el Claude Code oficial de Anthropic, y el usuario inicia sesión en Claude Code, en la Terminal de Anthropic, nunca en una pantalla nuestra. Un servicio pequeño en su Mac (`127.0.0.1:4317`) conecta la pizarra con su `claude` (stream-json y un MCP «studio»). Es lo que hace Clonify. Está hecho en `aify-pictures-web` #35 |
 
 Imágenes con la suscripción del usuario: las genera en ChatGPT o Gemini web, en otra pestaña, y las arrastra a la pizarra. Con clave, el paso Generador lo hace solo (ya existe).
 
@@ -61,7 +61,7 @@ Cada encargo cabe en una noche o en una sesión. **(yo)** = lo hago en sesión (
 ### Fase 0: un solo sitio
 0.1 **(yo)** `studio.useaify.app` sirve la pizarra en `/`, @Pictures en `/pictures/` y @Film en `/film/`, desde `aify-pictures-web` y con las cabeceras COOP/COEP. Las direcciones de ahora redirigen.
    - **Hecho cuando:** los tres cargan en el mismo origen y @Film tiene hilos (`crossOriginIsolated === true`).
-0.2 **(yo + Dylan)** Escribir a Anthropic pidiendo aprobación para la forma C (opcional).
+0.2 **(yo + Dylan)** Escribir a Anthropic pidiendo aprobación para la forma C: el puente ya está hecho (#35).
 
 ### Fase 1: los brutos sin subir y las versiones
 1.1 **Archivos del disco con File System Access.** Arrastrar o «Añadir archivos» guarda el permiso del archivo (Chrome y Edge), no una copia. En Safari se copia, como ahora.
@@ -106,7 +106,7 @@ Cada encargo cabe en una noche o en una sesión. **(yo)** = lo hago en sesión (
 - **Rendimiento:** el navegador va más lento que el escritorio con 4K y LOG. La fase 6.1 es imprescindible para los clientes con cámara.
 - **File System Access** solo existe en Chrome y Edge. En Safari, los archivos se copian al navegador.
 - **COOP/COEP** en todo el origen: las miniaturas externas (YouTube, IG) necesitan `credentialless` o un proxy.
-- **Forma C:** sin aprobación de Anthropic no se hace. Las formas A y B no dependen de ella.
+- **Forma C:** Anthropic no permite «salvo aprobación previa» que terceros ofrezcan el inicio de sesión de claude.ai. Aquí el inicio de sesión es el de Claude Code y lo hace el usuario, como en Clonify, pero es zona gris: conviene pedir la aprobación. Si lo cierran, quedan las formas A y B.
 - **Recetas frente a scripts:** nuestros motores de Python hacen cosas (DeepFilterNet, etalonajes con ffgraph) que no existen tal cual en @Film. Al traducirlos habrá diferencias, y algunas piezas de cliente seguirán montándose en local mientras tanto.
 
 ## Relacionado
