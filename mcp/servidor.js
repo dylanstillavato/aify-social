@@ -794,7 +794,8 @@ export function crearServidorMcp(dependencias, { organizacionId, userId }) {
     description: 'Lee una pizarra de @Pictures («Mira mi pizarra»): título, cliente y contenido { nodos, flechas, apuntes }. '
       + 'Cada nodo tiene id, tipo, posición (x, y, ancho, alto) y datos. Tipos: nota (texto e indicaciones del usuario en datos.texto), '
       + 'imagen (referencia o pieza), video, voz (nota de voz o audio), enlace (URL en datos.url), kit (kit de marca: colores, fuentes, logo), '
-      + 'prompt y generador (pasos del modo flujo: lo que les llega por flechas son sus entradas; prompt lleva datos.instrucciones). '
+      + 'prompt y generador (pasos del modo flujo: lo que les llega por flechas son sus entradas; prompt lleva datos.instrucciones y datos.ia), '
+      + 'trazo (dibujo a mano del usuario; con datos.flecha, una flecha dibujada que señala lo que tiene alrededor). '
       + 'Las flechas van de un nodo (desde) a otro (hasta), con texto opcional: léelas como «esto va con esto» o «haz esto con esto». '
       + 'Los apuntes son notas largas en markdown del proyecto. Los nodos con archivo traen "url": una URL de lectura que caduca en 1 hora, para ver la imagen o descargar el vídeo o el audio.',
     inputSchema: { pizarra_id: idSchema('id de la pizarra (de listar_pizarras o del enlace que da @Pictures)') },
