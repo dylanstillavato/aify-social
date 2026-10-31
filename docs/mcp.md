@@ -8,13 +8,47 @@ Pictures («Mira mi pizarra»).
 - Código: `mcp/servidor.js` (lo monta `server.js` en `POST /mcp`).
 - Transporte: Streamable HTTP sin estado (un servidor MCP por petición). `GET`
   y `DELETE /mcp` responden 405.
-- Autenticación: clave de API de la organización (`Authorization: Bearer aify_...`),
-  creada en Configuración → Tu IA → «Conecta tu Claude o tu ChatGPT». Tabla `claves_api`
-  (migración `0046_claves_api.sql`). Sin clave, o con una revocada: 401.
-- Cada herramienta solo ve datos de la organización de la clave. Nunca devuelve
-  tokens de Instagram ni claves.
+- Autenticación, de dos maneras (las dos llevan a la misma organización):
+  - **OAuth** (claude.ai, Claude Desktop, ChatGPT): el usuario pega la URL,
+    inicia sesión en Aify y pulsa «Permitir». Ver «OAuth» más abajo.
+  - **Clave de API** (`Authorization: Bearer aify_...`, Claude Code y Aify
+    Pictures), creada en Configuración → Tu IA. Tabla `claves_api`
+    (migración `0046_claves_api.sql`).
+
+  Sin clave ni token, o con uno revocado o caducado: 401. Los 401 llevan
+  `WWW-Authenticate` con la dirección de los metadatos de OAuth.
+- Cada herramienta solo ve datos de la organización de la clave o del token.
+  Nunca devuelve tokens de Instagram ni claves.
 
 ## Conectarlo
+
+La dirección del MCP de Aify es:
+
+```
+https://aify-backend.onrender.com/mcp
+```
+
+Configuración → Tu IA la enseña con un botón de copiar.
+
+### claude.ai y Claude Desktop
+
+1. Abre Claude y ve a **Ajustes → Conectores**.
+2. Pulsa **Añadir conector personalizado**.
+3. Nombre: `Aify`. URL: la dirección de arriba. Pulsa **Añadir**.
+4. Pulsa **Conectar**. Se abre Aify: inicia sesión con tu cuenta de Aify y pulsa **Permitir**.
+5. Vuelves a Claude con Aify conectado. Pruébalo: «¿Qué clientes tengo en Aify?».
+
+Lo que se conecta en claude.ai vale también en Claude Desktop y en la app del
+móvil con la misma cuenta. Los conectores personalizados dependen del plan de Claude.
+
+### ChatGPT
+
+1. En ChatGPT, ve a **Ajustes → Aplicaciones y conectores**.
+2. Si no ves **Crear**, entra en **Configuración avanzada** y activa el **modo
+   desarrollador** (depende de tu plan de ChatGPT).
+3. Pulsa **Crear**. Nombre: `Aify`. URL: la dirección de arriba. Autenticación: **OAuth**.
+4. Se abre Aify: inicia sesión y pulsa **Permitir**.
+5. En un chat nuevo, activa Aify en el menú de herramientas y pídele lo que quieras.
 
 Desde el navegador (@Pictures), `/mcp` acepta CORS de la web de Aify y de
 `AIFY_PICTURES_ORIGINS` (por defecto `https://pictures.useaify.app`,
@@ -22,42 +56,65 @@ Desde el navegador (@Pictures), `/mcp` acepta CORS de la web de Aify y de
 
 ### Claude Code
 
+Con una clave: créala en Configuración → Tu IA → «Crear clave» y pega en la terminal:
+
 ```bash
 claude mcp add --transport http aify https://aify-backend.onrender.com/mcp \
   --header "Authorization: Bearer <tu clave>"
 ```
 
-Configuración enseña este comando ya con la URL del servidor (y con la clave
-recién creada, mientras se ve).
+Configuración enseña este comando ya con la URL (y con la clave recién creada,
+mientras se ve). Sin `--header`, Claude Code también puede usar OAuth: escribe
+`/mcp` en Claude Code, elige `aify` y pulsa autenticar.
 
-### Claude Desktop / claude.ai
+### Desconectar
 
-Ajustes → Conectores → Añadir conector personalizado, con la URL
-`https://aify-backend.onrender.com/mcp` y la cabecera
-`Authorization: Bearer <tu clave>`.
+Configuración → Tu IA:
 
-Si el conector no deja poner cabeceras, en Claude Desktop se puede usar
-[`mcp-remote`](https://www.npmjs.com/package/mcp-remote) en
-`claude_desktop_config.json`:
+- **Apps conectadas**: cada Claude o ChatGPT conectado con OAuth, con su último
+  uso. «Desconectar» la corta al momento (su token deja de valer).
+- **Claves**: «Revocar» corta esa clave.
 
-```json
-{
-  "mcpServers": {
-    "aify": {
-      "command": "npx",
-      "args": ["mcp-remote", "https://aify-backend.onrender.com/mcp", "--header", "Authorization: Bearer <tu clave>"]
-    }
-  }
-}
-```
+Desde el navegador (@Pictures), `/mcp` y `/api/pizarras` aceptan CORS de la
+web de Aify y de `AIFY_PICTURES_ORIGINS` (por defecto `https://pictures.useaify.app`,
+`http://localhost:5173` y `http://localhost:4173`); la clave sigue siendo obligatoria.
 
-### ChatGPT
+## OAuth
 
-Ajustes → Aplicaciones y conectores → Configuración avanzada → modo
-desarrollador (depende del plan de ChatGPT). Después, en Conectores, crear uno
-nuevo con la misma URL (`https://aify-backend.onrender.com/mcp`) y la misma
-cabecera `Authorization: Bearer <tu clave>`. Configuración → Tu IA enseña estos
-pasos con la URL del servidor.
+Código: `mcp/oauth.js` (montado desde `server.js`). Migración `0055_oauth_mcp.sql`.
+Sigue la [autorización de MCP](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
+(versión `2025-11-25`, la del SDK `@modelcontextprotocol/sdk` 1.32) y usa
+`mcpAuthRouter` del SDK para las rutas y las comprobaciones de OAuth.
+
+| Ruta | Qué es |
+| --- | --- |
+| `GET /.well-known/oauth-protected-resource/mcp` (y sin `/mcp`) | metadatos del recurso (RFC 9728): `resource` = `<AIFY_BACKEND_URL>/mcp` y el servidor de autorización |
+| `GET /.well-known/oauth-authorization-server` | metadatos del servidor de autorización (RFC 8414): PKCE `S256`, registro, token y revocación |
+| `POST /register` | registro dinámico (RFC 7591). Todos los clientes son públicos (`token_endpoint_auth_method: none`, sin secreto) y las `redirect_uris` tienen que ser `https` o `localhost` |
+| `GET /authorize` | guarda la solicitud (10 min) y lleva a la pantalla `/autorizar-mcp?solicitud=<id>` del frontend (`src/pages/AutorizarMcp.jsx`) |
+| `POST /token` | `authorization_code` (con `code_verifier`) y `refresh_token` |
+| `POST /revoke` | revoca un token de acceso o de refresco |
+
+Pantalla y ajustes, con la sesión de Supabase:
+
+- `GET /api/oauth-mcp/solicitudes/:id`: app que pide acceso, sitio al que volverá y organización.
+- `POST /api/oauth-mcp/solicitudes/:id` `{ permitir }`: devuelve `{ redirigir_a }`
+  con el código (o con `error=access_denied`) y el `state`.
+- `GET /api/oauth-mcp/apps` y `DELETE /api/oauth-mcp/apps/:id`: Apps conectadas
+  (desconectar: quien la conectó o el owner/admin).
+
+Reglas:
+
+- El token de acceso dura 1 h; el de refresco, 60 días y se rota en cada uso.
+- Códigos y tokens se guardan solo como sha256. El código es de un solo uso y caduca a los 10 minutos.
+- Los tokens solo valen para este MCP (`resource`): si piden otro, `invalid_target`.
+- El token queda ligado a la organización de quien pulsó «Permitir» y deja de
+  valer si esa persona sale de la organización.
+- `/mcp` y `/api/pizarras` aceptan el token igual que una clave `aify_`
+  (`requireClaveApi` en `server.js`).
+- `AIFY_BACKEND_URL` es la URL pública del servidor (emisor de OAuth); sin
+  ella, el origen de `INSTAGRAM_REDIRECT_URI`. Tiene que ser `https` fuera de
+  `localhost`, o OAuth se desactiva (las claves siguen).
 
 ## Herramientas de lectura
 
@@ -106,9 +163,9 @@ No hay herramientas para borrar clientes ni posts.
 Desde ahí, el proceso de publicación de `server.js` lo publica a su hora igual
 que lo programado desde la web.
 
-## Pizarras (Aify Pictures)
+## Pizarras (@Pictures)
 
-Aify Pictures Studio sube la pizarra de un proyecto (notas, referencias,
+@Pictures Studio sube la pizarra de un proyecto (notas, referencias,
 flechas, notas de voz, kit de marca) y la IA del usuario la lee y deja ahí lo
 que hace. Tabla `pizarras` (migración `0054_pizarras.sql`); la lógica está en
 `mcp/pizarras.js` y la comparten las herramientas y las rutas REST. Sin la
@@ -135,7 +192,7 @@ Aify guarda tal cual lo que no conoce del contenido.
 
 ### «Mira mi pizarra»
 
-1. En Aify Pictures, el usuario pulsa «Mira mi pizarra»: Studio guarda la
+1. En @Pictures, el usuario pulsa «Mira mi pizarra»: Studio guarda la
    pizarra en Aify y le da a su IA el `pizarra_id`.
 2. La IA llama a `ver_pizarra`: lee las notas, sigue las flechas y abre las
    imágenes, los vídeos y los audios con su `url`.

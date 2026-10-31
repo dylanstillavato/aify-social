@@ -44,6 +44,7 @@ const Login = lazy(() => import('./pages/Login'))
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 const InvitacionOrganizacion = lazy(() => import('./pages/InvitacionOrganizacion'))
+const AutorizarMcp = lazy(() => import('./pages/AutorizarMcp'))
 const Landing = lazy(() => import('./pages/Landing'))
 const Familia = lazy(() => import('./pages/Familia'))
 const Onboarding = lazy(() => import('./pages/Onboarding'))
@@ -196,6 +197,19 @@ function AppContent() {
       <ProtectedRoute fallback={<Suspense fallback={<RouteFallback />}><InvitacionOrganizacion /></Suspense>}>
         <Suspense fallback={<RouteFallback />}>
           <InvitacionOrganizacion />
+        </Suspense>
+      </ProtectedRoute>
+    )
+  }
+
+  // Pantalla «Permitir» del OAuth del MCP (claude.ai, ChatGPT): con y sin
+  // sesión, como /invitacion/ (sin sesión, la propia página pide iniciar
+  // sesión y vuelve aquí). Fuera de OnboardingGuard y del Sidebar.
+  if (location.pathname === '/autorizar-mcp') {
+    return (
+      <ProtectedRoute fallback={<Suspense fallback={<RouteFallback />}><AutorizarMcp /></Suspense>}>
+        <Suspense fallback={<RouteFallback />}>
+          <AutorizarMcp />
         </Suspense>
       </ProtectedRoute>
     )

@@ -1,7 +1,7 @@
 import crypto from 'node:crypto'
 
 // ── Pizarras (0054_pizarras.sql, docs/mcp.md) ─────────────────────────────────
-// «Mira mi pizarra» de Aify Pictures: Studio sube la pizarra de un proyecto y
+// «Mira mi pizarra» de @Pictures: Studio sube la pizarra de un proyecto y
 // la IA del usuario la lee y deja resultados en ella. Lo usan las herramientas
 // del MCP (mcp/servidor.js) y las rutas /api/pizarras de server.js, con la
 // misma lógica y el mismo formato de respuesta.

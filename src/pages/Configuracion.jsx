@@ -14,6 +14,7 @@ import { resetOnboarding } from '../utils/onboarding'
 import { resetTutorial } from '../utils/tutorial'
 import { obtenerClaveIa, guardarClaveIa, probarClaveIa, quitarClaveIa } from '../services/claveIa'
 import { listarClavesApi, crearClaveApi, revocarClaveApi } from '../services/clavesApi'
+import { listarAppsConectadas, desconectarApp } from '../services/oauthMcp'
 import { apiUrlAbsoluta } from '../services/apiBase'
 import { OPCIONES_MODO_COBRO } from '../utils/modoCobro'
 import SeccionProceso from '../components/SeccionProceso'
@@ -537,7 +538,9 @@ function SeccionEquipo({ org }) {
 // En @Social la IA la pone cada usuario, de dos maneras y sin pedir nunca
 // la contraseña de Claude ni de ChatGPT:
 // - TarjetaConectaTuPlan: su Claude o su ChatGPT, con su plan, trabaja con los
-//   datos de Aify por el MCP (claves aify_, /api/claves-api, docs/mcp.md).
+//   datos de Aify por el MCP (docs/mcp.md): claude.ai, Claude Desktop y
+//   ChatGPT con OAuth (solo la URL; AppsConectadas, /api/oauth-mcp) y Claude
+//   Code con una clave aify_ (/api/claves-api).
 // - TarjetaClaveApi: su clave de API de Claude o de Gemini, que usan los
 //   botones de IA de la app (/api/ia/clave, 0043 + 0053). El servidor la
 //   prueba, la cifra y solo devuelve sus últimos 4 caracteres.
@@ -750,6 +753,67 @@ function TarjetaClaveApi({ org, onGuardado }) {
   )
 }
 
+// Apps conectadas con OAuth (claude.ai, Claude Desktop, ChatGPT): cada una
+// actúa en nombre de quien pulsó «Permitir» (/api/oauth-mcp/apps).
+function AppsConectadas() {
+  const esMovil = useEsMovil()
+  const [estado, setEstado] = useState(null) // { apps, sinMigracion } o { error }
+  const [quitando, setQuitando] = useState(null)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    let vivo = true
+    listarAppsConectadas()
+      .then(data => { if (vivo) setEstado(data) })
+      .catch(err => { if (vivo) setEstado({ error: err.message }) })
+    return () => { vivo = false }
+  }, [])
+
+  const desconectar = async (id) => {
+    if (quitando) return
+    setQuitando(id)
+    setError(null)
+    try {
+      await desconectarApp(id)
+      setEstado(s => ({ ...s, apps: s.apps.filter(a => a.id !== id) }))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setQuitando(null)
+    }
+  }
+
+  if (!estado || estado.error || estado.sinMigracion || !estado.apps?.length) {
+    if (!estado?.sinMigracion) return null
+    return <p style={{ fontSize: 12, margin: '10px 0 0', color: 'var(--text-tertiary)' }}>Falta aplicar la migración 0055 para conectar con OAuth.</p>
+  }
+
+  const fecha = (iso) => new Date(iso).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>Apps conectadas</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {estado.apps.map(a => (
+          <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '10px 14px', borderRadius: 12, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)' }}>
+            <Plug size={15} color="#86868B" strokeWidth={2} />
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflowWrap: 'anywhere' }}>{a.nombre}</div>
+              <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 1 }}>
+                {a.ultimo_uso_en ? `Último uso el ${fecha(a.ultimo_uso_en)}` : 'Sin usar todavía'} · Conectada el {fecha(a.conectada_en)}
+              </div>
+            </div>
+            <button type="button" onClick={() => desconectar(a.id)} disabled={!!quitando}
+              style={{ padding: '9px 16px', minHeight: esMovil ? 44 : undefined, borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap', background: 'rgba(255,59,48,0.08)', color: '#FF3B30', cursor: quitando ? 'wait' : 'pointer' }}>
+              {quitando === a.id ? 'Desconectando…' : 'Desconectar'}
+            </button>
+          </div>
+        ))}
+      </div>
+      {error && <p style={{ fontSize: 12, margin: '8px 0 0', color: '#FF3B30' }}>{error}</p>}
+    </div>
+  )
+}
+
 // Conecta tu Claude o tu ChatGPT: claves aify_ para el MCP de Aify (server.js,
 // /api/claves-api). Con ellas, la IA del usuario usa Aify con su propio plan.
 function TarjetaConectaTuPlan({ onGuardado }) {
@@ -759,6 +823,7 @@ function TarjetaConectaTuPlan({ onGuardado }) {
   const [nueva, setNueva] = useState(null) // { nombre, clave } recién creada: se enseña una sola vez
   const [copiada, setCopiada] = useState(false)
   const [comandoCopiado, setComandoCopiado] = useState(false)
+  const [urlCopiada, setUrlCopiada] = useState(false)
   const [trabajando, setTrabajando] = useState(null) // 'crear' | id de la clave que se revoca
   const [error, setError] = useState(null)
 
@@ -815,6 +880,12 @@ function TarjetaConectaTuPlan({ onGuardado }) {
 
   const urlMcp = apiUrlAbsoluta('/mcp')
   const comandoClaude = `claude mcp add --transport http aify ${urlMcp} --header "Authorization: Bearer ${nueva ? nueva.clave : '<tu clave>'}"`
+  const copiarUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(urlMcp)
+      setUrlCopiada(true)
+    } catch { /* sin permiso de portapapeles: se puede seleccionar a mano */ }
+  }
   const copiarComando = async () => {
     try {
       await navigator.clipboard.writeText(comandoClaude)
@@ -837,8 +908,28 @@ function TarjetaConectaTuPlan({ onGuardado }) {
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>Conecta tu Claude o tu ChatGPT (con tu plan)</div>
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 1 }}>Tu IA trabaja con tus clientes, ideas, guiones y calendario de Aify, con tu plan de Claude o de ChatGPT. Crea una clave y conéctala por MCP.</div>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 1 }}>Tu IA trabaja con tus clientes, ideas, guiones, calendario y pizarras de Aify, con tu plan de Claude o de ChatGPT.</div>
         </div>
+      </div>
+
+      <div style={{ marginTop: 14, padding: '12px 14px', borderRadius: 12, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Conectar con claude.ai, Claude Desktop o ChatGPT</div>
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>No hace falta clave: solo esta dirección.</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+          <code style={{ flex: '1 1 260px', minWidth: 0, padding: '9px 12px', borderRadius: 10, background: 'var(--bg-card)', border: '1px solid var(--border-color)', fontSize: 12, color: 'var(--text-primary)', overflowWrap: 'anywhere', userSelect: 'all' }}>
+            {urlMcp}
+          </code>
+          <button type="button" onClick={copiarUrl}
+            style={{ ...boton, display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', cursor: 'pointer' }}>
+            {urlCopiada ? <Check size={14} /> : <Copy size={14} />} {urlCopiada ? 'Copiada' : 'Copiar'}
+          </button>
+        </div>
+        <ol style={{ margin: '8px 0 0', paddingLeft: 20, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+          <li>claude.ai o Claude Desktop: Ajustes, Conectores, «Añadir conector personalizado». Ponle de nombre Aify y pega la dirección.</li>
+          <li>ChatGPT: Ajustes, Aplicaciones y conectores, «Crear» (si no lo ves, activa el modo desarrollador en Configuración avanzada; depende de tu plan). Pega la dirección y elige OAuth.</li>
+          <li>Se abre Aify: inicia sesión con tu cuenta y pulsa «Permitir». Ya está.</li>
+        </ol>
+        <AppsConectadas />
       </div>
 
       {nueva && (
@@ -907,7 +998,7 @@ function TarjetaConectaTuPlan({ onGuardado }) {
       </p>
 
       <div style={{ marginTop: 12, padding: '12px 14px', borderRadius: 12, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Conectar con Claude Code</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Conectar con Claude Code (con clave)</div>
         <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>Pega este comando en la terminal{nueva ? ' (ya lleva tu clave nueva)' : ', cambiando <tu clave> por la clave que crees'}:</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
           <code style={{ flex: '1 1 260px', minWidth: 0, padding: '9px 12px', borderRadius: 10, background: 'var(--bg-card)', border: '1px solid var(--border-color)', fontSize: 12, color: 'var(--text-primary)', overflowWrap: 'anywhere', userSelect: 'all' }}>
@@ -918,19 +1009,8 @@ function TarjetaConectaTuPlan({ onGuardado }) {
             {comandoCopiado ? <Check size={14} /> : <Copy size={14} />} {comandoCopiado ? 'Copiado' : 'Copiar'}
           </button>
         </div>
-        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 10, lineHeight: 1.5 }}>
-          Claude Desktop o claude.ai: Ajustes → Conectores → Añadir conector personalizado, con la URL <code style={{ overflowWrap: 'anywhere' }}>{urlMcp}</code> y la cabecera <code>Authorization: Bearer &lt;tu clave&gt;</code>.
-        </div>
       </div>
 
-      <div style={{ marginTop: 12, padding: '12px 14px', borderRadius: 12, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Conectar con ChatGPT</div>
-        <ol style={{ margin: '6px 0 0', paddingLeft: 20, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-          <li>En ChatGPT, abre Ajustes → Aplicaciones y conectores → Configuración avanzada y activa el modo desarrollador (depende de tu plan de ChatGPT).</li>
-          <li>En Conectores, crea uno nuevo con la URL <code style={{ overflowWrap: 'anywhere' }}>{urlMcp}</code>.</li>
-          <li>Ponle la misma cabecera que a Claude: <code>Authorization: Bearer &lt;tu clave&gt;</code>.</li>
-        </ol>
-      </div>
     </div>
   )
 }

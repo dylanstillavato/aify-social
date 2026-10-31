@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Eye, EyeOff, Mail, Lock, User, Check, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
@@ -149,6 +149,10 @@ export default function Login() {
   const { signIn, signUp, cuentasGuardadas, cambiarCuenta, error: authError } = useAuth()
   const { theme } = useTheme()
   const navigate = useNavigate()
+  const location = useLocation()
+  // Destino al que volver tras iniciar sesión (/invitacion/…, /autorizar-mcp…):
+  // solo rutas internas de la app
+  const returnTo = typeof location.state?.returnTo === 'string' && /^\/(?!\/)/.test(location.state.returnTo) ? location.state.returnTo : null
   const [tab, setTab] = useState(() => (
     new URLSearchParams(window.location.search).get('tab') === 'registro' ? 'registro' : 'login'
   ))
@@ -203,6 +207,7 @@ export default function Login() {
   }
 
   const irTrasLoginExitoso = async (user) => {
+    if (returnTo) { navigate(returnTo); return }
     const onboardingDone =
       user?.user_metadata?.onboarding_completado ||
       isOnboardingCompleto(user?.id)
