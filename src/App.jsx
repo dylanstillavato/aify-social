@@ -45,6 +45,7 @@ const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 const InvitacionOrganizacion = lazy(() => import('./pages/InvitacionOrganizacion'))
 const AutorizarMcp = lazy(() => import('./pages/AutorizarMcp'))
+const AifyosAlta = lazy(() => import('./pages/AifyosAlta'))
 const Landing = lazy(() => import('./pages/Landing'))
 const Familia = lazy(() => import('./pages/Familia'))
 const Onboarding = lazy(() => import('./pages/Onboarding'))
@@ -211,6 +212,20 @@ function AppContent() {
         <Suspense fallback={<RouteFallback />}>
           <AutorizarMcp />
         </Suspense>
+      </ProtectedRoute>
+    )
+  }
+
+  // Alta de AifyOS: con y sin sesión, como /autorizar-mcp.
+  if (location.pathname === '/aifyos') {
+    return (
+      <ProtectedRoute fallback={<Suspense fallback={<RouteFallback />}><AifyosAlta /></Suspense>}>
+        {/* Quien acaba de crear la cuenta aún no tiene organización: esto la crea */}
+        <OrganizacionGuard>
+          <Suspense fallback={<RouteFallback />}>
+            <AifyosAlta />
+          </Suspense>
+        </OrganizacionGuard>
       </ProtectedRoute>
     )
   }
