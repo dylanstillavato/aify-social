@@ -28,8 +28,9 @@ const FRONTEND_ORIGINS = (process.env.GOOGLE_FRONTEND_URL || 'http://localhost:5
 // AIFY_PICTURES_ORIGINS (separados por comas, mismo saneado que arriba) o, sin
 // la variable, la web publicada y los puertos de Vite (dev y preview). El CORS
 // no abre nada por sí solo: el MCP sigue exigiendo la clave de API.
-// studio.useaify.app (@Studio) va siempre, aunque la variable esté definida en Render sin él.
-const ORIGENES_PICTURES = ((process.env.AIFY_PICTURES_ORIGINS || 'https://pictures.useaify.app,http://localhost:5173,http://localhost:4173') + ',https://studio.useaify.app')
+// @Studio (studio.useaify.app) y AifyOS (os.useaify.app, aify-os.vercel.app y su puerto local) van
+// siempre, aunque la variable esté definida en Render sin ellos.
+const ORIGENES_PICTURES = ((process.env.AIFY_PICTURES_ORIGINS || 'https://pictures.useaify.app,http://localhost:5173,http://localhost:4173') + ',https://studio.useaify.app,https://os.useaify.app,https://aify-os.vercel.app,http://localhost:5193')
   .split(',')
   .map(o => o.trim().replace(/\/+$/, ''))
   .filter(Boolean)
