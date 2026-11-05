@@ -28,3 +28,9 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET_AIFYOS
+        sync: false
+      - key: STRIPE_PRICE_AIFYOS_MONTHLY
+        sync: false

@@ -9,6 +9,8 @@ import { Readable } from 'node:stream'
 import { montarMcp } from './mcp/servidor.js'
 import { crearPizarras, ErrorPizarra } from './mcp/pizarras.js'
 import { crearOAuthMcp } from './mcp/oauth.js'
+import { crearAifyos } from './mcp/aifyos.js'
+import Stripe from 'stripe'
 import * as z from 'zod'
 
 dotenv.config()
@@ -58,6 +60,11 @@ app.use(['/.well-known/oauth-authorization-server', '/.well-known/oauth-protecte
 app.use('/api/pictures/lista-espera', cors({ origin: ORIGENES_PICTURES }))
 app.use(cors({ origin: FRONTEND_ORIGINS }))
 
+// Webhook de la licencia de AifyOS (mcp/aifyos.js): antes de express.json porque
+// la firma de Stripe se calcula sobre el cuerpo exacto. crearAifyos se llama más
+// abajo, cuando ya existe supabaseAdmin.
+app.post('/api/aifyos/stripe/webhook', express.raw({ type: 'application/json' }), (req, res) => aifyos.webhook(req, res))
+
 // rawBody: el webhook de Instagram firma el cuerpo exacto (X-Hub-Signature-256).
 app.use(express.json({ limit: '2mb', verify: (req, _res, buf) => { req.rawBody = buf } }))
 
@@ -99,6 +106,14 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 const supabaseAdmin = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
   ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
   : null
+
+const aifyos = crearAifyos({
+  stripe: process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null,
+  supabaseAdmin,
+  priceId: process.env.STRIPE_PRICE_AIFYOS_MONTHLY,
+  webhookSecret: process.env.STRIPE_WEBHOOK_SECRET_AIFYOS,
+  urlFrontend: FRONTEND_ORIGINS[0] || 'http://localhost:5174',
+})
 
 async function requireAuth(req, res, next) {
   if (!supabaseAuth) {
@@ -1432,6 +1447,36 @@ async function requireTokenOAuth(token, req, res, next) {
   oauthMcp.apuntarUso(info)
   next()
 }
+
+// ── Licencia de AifyOS (mcp/aifyos.js, 0056_aifyos_licencias.sql) ─────────────
+// GET /api/aifyos/licencia la llama AifyOS con el token de OAuth de la cuenta
+// conectada (misma autenticación que /mcp) y, como ese token no dice de quién es,
+// también le da la identidad: AifyOS separa los datos de cada usuario con ese id.
+// El resto las usa la página /aifyos de la web, con la sesión de Supabase.
+
+const respuestaAifyos = (fn) => async (req, res) => {
+  if (!supabaseAdmin) return res.status(503).json({ error: 'Base de datos no disponible en el servidor' })
+  try {
+    res.json(await fn(req))
+  } catch (err) {
+    if (!err.estado) console.error('[aifyos] error inesperado:', err.message)
+    res.status(err.estado || 500).json({ error: err.estado ? err.message : 'Error inesperado. Inténtalo de nuevo.' })
+  }
+}
+
+async function organizacionDe(req) {
+  const miembro = await miembroDeOrganizacion(req.userId)
+  if (!miembro) throw Object.assign(new Error('Tu cuenta no tiene organización en Aify todavía. Termina de crear tu cuenta y vuelve a esta página.'), { estado: 400 })
+  return miembro.organizacion_id
+}
+
+app.get('/api/aifyos/licencia', requireClaveApi, respuestaAifyos(async (req) => {
+  const { data } = await supabaseAdmin.auth.admin.getUserById(req.userId)
+  return { ...(await aifyos.estado(req.organizacionId)), usuario_id: req.userId, organizacion_id: req.organizacionId, email: data?.user?.email ?? null }
+}))
+app.get('/api/aifyos/mi-licencia', requireAuth, respuestaAifyos(async (req) => aifyos.estado(await organizacionDe(req))))
+app.post('/api/aifyos/checkout', requireAuth, respuestaAifyos(async (req) => aifyos.crearCheckout({ organizacionId: await organizacionDe(req), email: req.userEmail })))
+app.post('/api/aifyos/portal', requireAuth, respuestaAifyos(async (req) => aifyos.crearPortal(await organizacionDe(req))))
 
 // ── Pizarras de @Pictures por REST (0054_pizarras.sql, docs/mcp.md) ──────
 // Lo mismo que las herramientas de pizarras del MCP (mcp/pizarras.js), para
@@ -4866,6 +4911,7 @@ console.log('  GET/POST /api/pizarras · POST /api/pizarras/subidas · GET/PUT /
 console.log('  GET/POST /api/oauth-mcp/solicitudes/:id · GET /api/oauth-mcp/apps · DEL /api/oauth-mcp/apps/:id')
 console.log('  OAuth del MCP: /.well-known/oauth-authorization-server · /.well-known/oauth-protected-resource/mcp · /authorize · /token · /register · /revoke')
 console.log('  POST /mcp (MCP de Aify, clave de API o token de OAuth)')
+console.log('  GET  /api/aifyos/licencia · POST /api/aifyos/stripe/webhook')
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`\nAify proxy corriendo en http://localhost:${PORT}`)

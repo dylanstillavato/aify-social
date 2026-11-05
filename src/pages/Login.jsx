@@ -244,7 +244,7 @@ export default function Login() {
     if (ok) {
       // hasSession=false significa que Supabase exige confirmar el email
       // antes de dar sesión.
-      if (hasSession) navigate('/onboarding')
+      if (hasSession) navigate(returnTo || '/onboarding')
       else setSuccess(true)
     } else {
       setLocalError(authError || 'Error al crear la cuenta')
