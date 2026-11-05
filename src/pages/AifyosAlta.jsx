@@ -79,7 +79,7 @@ export default function AifyosAlta() {
 
       {licencia && !licencia.activa && (
         <>
-          <p style={nota}>{volvioDePagar ? 'Estamos confirmando tu pago. Tarda unos segundos.' : '44 € al mes. Funciona con tu propia clave de Anthropic y tu token de Apify, que pagas aparte a cada proveedor. Se renueva cada mes hasta que canceles.'}</p>
+          <p style={nota}>{volvioDePagar ? 'Estamos confirmando tu pago. Tarda unos segundos.' : '44 € al mes. Funciona con tu plan de Claude, en tu Mac, y tu token de Apify, que pagas aparte a cada proveedor. Se renueva cada mes hasta que canceles.'}</p>
           {!volvioDePagar && <button style={boton} disabled={ocupado} onClick={() => irA(empezarPago)}>Suscribirme</button>}
           <p style={nota}><a href="https://os.useaify.app/terminos">Términos y privacidad</a></p>
         </>
