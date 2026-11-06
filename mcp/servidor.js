@@ -43,6 +43,9 @@ const formatoPostSchema = z.enum([...FORMATOS_POST, 'reel']).transform(f => (f =
 
 // Subidas al bucket "publicaciones": lo mismo que acepta el navegador
 // (PublicarInstagram.jsx sube los vídeos en mp4 y las imágenes en jpg)
+// Estrategias de Trial Reel de Meta (trial_params.graduation_strategy), las mismas que server.js
+const GRADUACIONES_TRIAL = ['MANUAL', 'SS_PERFORMANCE']
+
 const TIPOS_SUBIDA = { 'video/mp4': { ext: 'mp4', tipo: 'video' }, 'image/jpeg': { ext: 'jpg', tipo: 'imagen' } }
 const tipoArchivoDeRuta = (ruta) => (/\.(mp4|mov)$/i.test(ruta) ? 'video' : /\.jpe?g$/i.test(ruta) ? 'imagen' : null)
 
@@ -147,7 +150,7 @@ const CAMPOS_PERFIL = [
 ]
 
 export function crearServidorMcp(dependencias, { organizacionId, userId }) {
-  const { supabaseAdmin, programarPublicacion, bucketPublicaciones } = dependencias
+  const { supabaseAdmin, programarPublicacion, metricasDirectasReel, bucketPublicaciones } = dependencias
   const {
     programarPublicacionTikTok, moverPublicacionTikTok, creadorTikTok, conexionTikTok, tiktokConfigurado,
     tiktokAuditada, permisoPublicarTikTok,
@@ -268,7 +271,7 @@ export function crearServidorMcp(dependencias, { organizacionId, userId }) {
         grabado: Boolean(p.grabado_en),
         tiene_guion: Boolean(p.guion),
         instagram: pub
-          ? { programado: pub.estado === 'programado' || pub.estado === 'procesando', estado: pub.estado, tipo: pub.tipo, publicar_en: pub.publicar_en, publicado_en: pub.publicado_en, enlace: pub.permalink, error: pub.error }
+          ? { programado: pub.estado === 'programado' || pub.estado === 'procesando', estado: pub.estado, tipo: pub.tipo, publicar_en: pub.publicar_en, publicado_en: pub.publicado_en, enlace: pub.permalink, error: pub.error, es_trial: Boolean(pub.es_trial), trial_graduacion: pub.es_trial ? pub.trial_graduacion || 'MANUAL' : null }
           : null,
         tiktok: pubTikTok
           ? {
@@ -362,9 +365,13 @@ export function crearServidorMcp(dependencias, { organizacionId, userId }) {
   servidor.registerTool('ver_metricas', {
     title: 'Ver métricas',
     description: 'Métricas que guarda Aify de un cliente. Instagram: la cuenta conectada y las de cada reel a las 24 h de publicarse (visualizaciones, alcance, me gusta, comentarios, guardados, compartidos, tiempo medio visto y % de saltos). TikTok: la cuenta conectada, la última foto diaria de la cuenta (seguidores, me gustas, vídeos, visualizaciones sumadas) y las de cada vídeo a las 24 h (visualizaciones, me gustas, comentarios, compartidos; TikTok no da alcance ni retención).',
-    inputSchema: { cliente_id: idSchema('id del cliente') },
+    inputSchema: {
+      cliente_id: idSchema('id del cliente'),
+      post_id: idSchema('id de un post publicado en Instagram desde Aify').optional()
+        .describe('Opcional: añade "reel_directo", la lectura de ese reel pedida ahora a Instagram, a la edad que tenga (por ejemplo, a las 72 h de un reel de prueba). No se guarda.'),
+    },
     annotations: { readOnlyHint: true },
-  }, herramienta('ver_metricas', async ({ cliente_id }) => {
+  }, herramienta('ver_metricas', async ({ cliente_id, post_id }) => {
     const cliente = await clienteDeOrganizacion(cliente_id, 'id, nombre')
     const [
       { data: conexion, error: errorConexion }, { data: reels, error: errorReels },
@@ -410,11 +417,40 @@ export function crearServidorMcp(dependencias, { organizacionId, userId }) {
         }
         : null,
       tiktok_videos_24h: videosTikTok || [],
+      ...(post_id ? { reel_directo: await reelDirecto(cliente.id, post_id) } : {}),
       nota: notas.length ? notas.join(' ') : undefined,
     }
   }))
 
   // ── Escritura ──────────────────────────────────────────────────────────────
+
+  // Lectura de un reel publicado desde Aify, pedida ahora a Instagram. Va por el
+  // id del medio porque la foto de las 24 h sale de la lista de /media y Meta no
+  // documenta si esa lista incluye los Trial Reels.
+  async function reelDirecto(clienteId, postId) {
+    const { data: post, error } = await supabaseAdmin.from('calendario_posts').select('id').eq('id', postId).eq('cliente_id', clienteId).maybeSingle()
+    comprobar(error, 'el post')
+    if (!post) throw new ErrorMcp('No hay ningún post con ese id en ese cliente.')
+    const pub = await publicacionDelPost(post.id)
+    if (pub?.estado !== 'publicado' || !pub.ig_media_id) return { disponible: false, motivo: 'Este post todavía no está publicado en Instagram desde Aify.' }
+    if (!metricasDirectasReel) return { disponible: false, motivo: 'Esta instalación de Aify no lee métricas en directo.' }
+    let metricas
+    try {
+      metricas = await metricasDirectasReel({ clienteId, mediaId: pub.ig_media_id })
+    } catch (err) {
+      console.error('[mcp] reel_directo:', err.message)
+      return { disponible: false, motivo: 'Instagram no ha devuelto las métricas de este reel.' }
+    }
+    if (!metricas) return { disponible: false, motivo: 'La conexión de Instagram de este cliente no está activa.' }
+    return {
+      disponible: true,
+      es_trial: Boolean(pub.es_trial),
+      publicado_en: pub.publicado_en,
+      enlace: pub.permalink,
+      horas: pub.publicado_en ? Math.round((Date.now() - new Date(pub.publicado_en).getTime()) / 360000) / 10 : null,
+      ...metricas,
+    }
+  }
 
   // Publicación de Instagram de un post (0036); null si no hay o falta la tabla
   async function publicacionDelPost(postId) {
@@ -578,7 +614,7 @@ export function crearServidorMcp(dependencias, { organizacionId, userId }) {
 
   servidor.registerTool('programar_publicacion', {
     title: 'Programar publicación en Instagram',
-    description: 'Programa (o reprograma) en Instagram un post del calendario con archivos ya subidos con pedir_subida. Hace lo mismo que «Programar» en la web. Un reel lleva 1 vídeo, un post 1 imagen, un carrusel de 2 a 10 archivos y una historia 1 archivo.',
+    description: 'Programa (o reprograma) en Instagram un post del calendario con archivos ya subidos con pedir_subida. Hace lo mismo que «Programar» en la web. Un reel lleva 1 vídeo, un post 1 imagen, un carrusel de 2 a 10 archivos y una historia 1 archivo. Un reel puede ir como Trial Reel (es_trial): Instagram lo enseña primero solo a quien no sigue la cuenta. Con la respuesta se comprueba que ha quedado así (publicacion.es_trial).',
     inputSchema: {
       cliente_id: idSchema('id del cliente'),
       post_id: idSchema('id del post del calendario'),
@@ -587,22 +623,43 @@ export function crearServidorMcp(dependencias, { organizacionId, userId }) {
       caption: z.string().max(2200).default('').describe('Texto de la publicación (las historias no llevan)'),
       publicar_en: z.iso.datetime({ offset: true }).describe('Fecha y hora de publicación en ISO 8601 con zona, por ejemplo 2026-11-05T18:30:00+01:00'),
       compartir_en_feed: z.boolean().optional().describe('Reels: si también sale en el feed (por defecto, sí)'),
+      es_trial: z.boolean().optional().describe('Reels: publicarlo como Trial Reel. Reprogramar sin este campo conserva lo que tuviera; con false deja de ser Trial'),
+      trial_graduacion: z.enum(GRADUACIONES_TRIAL).optional()
+        .describe('Trial Reel: MANUAL (la cuenta decide en la app de Instagram si lo comparte con sus seguidores; la API de Meta no permite hacerlo) o SS_PERFORMANCE (Instagram lo comparte solo si funciona bien). Por defecto, MANUAL'),
+      portada_ruta: z.string().min(1).optional().describe('Reels: ruta de una imagen JPEG subida con pedir_subida, que será la portada'),
+      portada_nombre: z.string().trim().min(1).max(255).optional().describe('Reels: nombre original de la portada, para el resumen de lo programado'),
     },
-  }, herramienta('programar_publicacion', async ({ cliente_id, post_id, tipo, rutas, caption, publicar_en, compartir_en_feed }) => {
+  }, herramienta('programar_publicacion', async ({ cliente_id, post_id, tipo, rutas, caption, publicar_en, compartir_en_feed, es_trial, trial_graduacion, portada_ruta, portada_nombre }) => {
     const cliente = await clienteDeOrganizacion(cliente_id, 'id, nombre')
+    if (tipo !== 'reel' && (es_trial || trial_graduacion || portada_ruta)) throw new ErrorMcp('El Trial Reel y la portada son solo para reels.')
+    if (trial_graduacion && !es_trial) throw new ErrorMcp('trial_graduacion va con es_trial: true.')
+    if (portada_ruta && tipoArchivoDeRuta(portada_ruta) !== 'imagen') throw new ErrorMcp('La portada tiene que ser una imagen JPEG subida con pedir_subida.')
     // Cada archivo tiene que estar ya subido (si no, fallaría a la hora de publicar)
     const archivos = await archivosSubidos(cliente.id, rutas)
+    if (portada_ruta) await archivosSubidos(cliente.id, [portada_ruta])
 
     const resultado = await programarPublicacion({
       clienteId: cliente.id,
       organizacionId,
       postId: post_id,
-      body: { tipo, archivos, caption, publicarEn: publicar_en, compartirEnFeed: compartir_en_feed !== false },
+      body: {
+        tipo, archivos, caption, publicarEn: publicar_en, compartirEnFeed: compartir_en_feed !== false,
+        ...(es_trial !== undefined ? { esTrial: es_trial } : {}),
+        ...(trial_graduacion ? { trialGraduacion: trial_graduacion } : {}),
+        ...(portada_ruta ? { portadaRuta: portada_ruta, portadaNombre: portada_nombre || null } : {}),
+      },
       userId,
     })
     if (resultado.error) throw new ErrorMcp(resultado.estado === 404 ? 'No hay ningún post con ese id en ese cliente.' : resultado.error)
     const pub = resultado.publicacion
-    return { ok: true, cliente: cliente.nombre, publicacion: { post_id: pub.post_id, tipo: pub.tipo, estado: pub.estado, publicar_en: pub.publicar_en, archivos: pub.archivos.length } }
+    return {
+      ok: true,
+      cliente: cliente.nombre,
+      publicacion: {
+        post_id: pub.post_id, tipo: pub.tipo, estado: pub.estado, publicar_en: pub.publicar_en, archivos: pub.archivos.length,
+        es_trial: pub.es_trial, trial_graduacion: pub.es_trial ? pub.trial_graduacion || 'MANUAL' : null, portada: Boolean(pub.portada_ruta),
+      },
+    }
   }))
 
   // ── TikTok ──

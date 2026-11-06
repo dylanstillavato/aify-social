@@ -3382,6 +3382,24 @@ const HORA_MS = 60 * 60 * 1000
 let cicloReels24hEnCurso = false
 let ultimoCicloReels24h = 0
 
+// Lectura de un reel pedida ahora a Instagram, sin guardarla (MCP: ver_metricas
+// con post_id). null si el cliente no tiene un token vigente.
+async function metricasDirectasReel({ clienteId, mediaId }) {
+  const accessToken = await tokenInstagramVigente(clienteId)
+  if (!accessToken) return null
+  const insights = await pedirInsights(`${mediaId}/insights`, IG_METRICAS_MEDIA.REEL, { access_token: accessToken })
+  return {
+    visualizaciones: insights.views ?? null,
+    alcance: insights.reach ?? null,
+    me_gusta: insights.likes ?? null,
+    comentarios: insights.comments ?? null,
+    guardados: insights.saved ?? null,
+    compartidos: insights.shares ?? null,
+    visto_medio_ms: insights.ig_reels_avg_watch_time ?? null,
+    saltos: insights.reels_skip_rate ?? null,
+  }
+}
+
 async function fotoReels24hCliente(conexion) {
   const accessToken = await tokenInstagramVigente(conexion.cliente_id)
   if (!accessToken) return 0
@@ -4856,6 +4874,7 @@ montarMcp(app, {
   supabaseAdmin,
   requireClaveApi,
   programarPublicacion,
+  metricasDirectasReel,
   bucketPublicaciones: BUCKET_PUBLICACIONES,
   // TikTok: las mismas funciones que los endpoints de la web
   programarPublicacionTikTok,
