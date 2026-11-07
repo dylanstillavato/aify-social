@@ -12,8 +12,9 @@ import {
 import { useClientesList } from '../hooks/useClientes'
 import { useClienteActivo } from '../hooks/useClienteActivo'
 import { generarLluviaIdeas, reescribirIdea } from '../services/ai'
+import { useGeneracionDePantalla } from '../hooks/useGeneraciones'
 import { crearIdea, eliminarIdea, actualizarIdea, useIdeasList } from '../hooks/useIdeas'
-import { formatoDe, otroFormato, esSinTexto } from '../utils/formato'
+import { formatoDe, otroFormato, etiquetaFormato, esSinTexto } from '../utils/formato'
 import { useCalendarioMes, getPostPorIdea } from '../hooks/useCalendario'
 import EditorIdea from '../components/EditorIdea'
 import GenerarGuionesModal from '../components/GenerarGuionesModal'
@@ -235,7 +236,10 @@ export default function LluviaDeIdeas({ clienteId: clienteIdFijo = null, cliente
   const [mostrarIdeasCal, setMostrarIdeasCal] = useState(true)
 
   const [ideas, setIdeas] = useState([])
-  const [generando, setGenerando] = useState(false)
+  // Generar ideas va a la cola de generaciones: sigue aunque se cambie de
+  // página y sale en la barra. Al volver, el botón sigue «Generando...»
+  const { ejecutar, enCurso } = useGeneracionDePantalla()
+  const [generandoAqui, setGenerando] = useState(false)
   const [progresoIdx, setProgresoIdx] = useState(0)
   const [error, setError] = useState(null)
   const [ideaDesarrollando, setIdeaDesarrollando] = useState(null)
@@ -248,6 +252,8 @@ export default function LluviaDeIdeas({ clienteId: clienteIdFijo = null, cliente
       ? null
       : (clientes.find(c => String(c.id) === String(clienteActivoId)) || clientes[0] || null)
   const clienteId = clienteData?.id ?? null
+  const claveGenerar = `lluvia-${clienteId ?? 'generico'}`
+  const generando = generandoAqui || !!enCurso(claveGenerar)
 
   // Métricas reales de Instagram del cliente (si lo tiene conectado): la IA
   // las usa para proponer más de lo que le funciona. Sin conexión, sin plan o
@@ -308,6 +314,26 @@ export default function LluviaDeIdeas({ clienteId: clienteIdFijo = null, cliente
   // be tracked per-session (local ids don't correlate to the real DB ids once saved).
   const [savedMap, setSavedMap] = useState({}) // `${localIdeaId}_${clienteId}` -> dbIdeaId
   const ideasGuardadasIds = Object.keys(savedMap)
+
+  // «Ver» de la barra de generaciones: abre la sesión que se generó con la
+  // página cerrada (se guarda en el historial de este navegador)
+  useEffect(() => {
+    const fecha = location.state?.sesionLluvia
+    if (!fecha) return
+    const entrada = lsGet(LS_HISTORIAL, []).find(h => h.fecha === fecha)
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (entrada) {
+      if (!embebido && entrada.clienteId !== undefined) {
+        if (entrada.clienteId == null) setSinCliente(true)
+        else { setSinCliente(false); setClienteActivoId(String(entrada.clienteId)) }
+      }
+      setHistorial(lsGet(LS_HISTORIAL, []))
+      setTema(entrada.tema); setIdeas(entrada.ideas || []); setSavedMap({}); setMostrarHistorial(false)
+    }
+    /* eslint-enable react-hooks/set-state-in-effect */
+    navigate(location.pathname, { replace: true, state: {} })
+  }, [location.state]) // eslint-disable-line
+
   // Con idea propia o vídeo de referencia se adapta eso tal cual: 1 a 3 versiones
   const modoLiteral = (tieneIdea || tieneReferencia) && !tieneAnuncio
   const opcionesNum = modoLiteral ? [1, 2, 3] : [4, 8, 12, 20, 30]
@@ -333,37 +359,50 @@ export default function LluviaDeIdeas({ clienteId: clienteIdFijo = null, cliente
   const handleGenerar = async () => {
     if (!canGenerate || generando) return
     setGenerando(true); setError(null); setIdeas([]); setSavedMap({})
+    const temaDisplay = tema || (tieneIdea ? ideaTexto : tieneAnuncio ? anuncioTexto : referenciaUrl) || ''
     try {
-      // Más de 15 ideas no caben en una respuesta de la IA: se piden en tandas
-      // de hasta 15, y cada tanda sabe qué títulos no debe repetir
-      let recibidas = []
-      for (let faltan = nIdeas; faltan > 0 && recibidas.length < nIdeas;) {
-        const pedir = Math.min(15, faltan)
-        const data = await generarLluviaIdeas(clienteData, tema, {
-          tiposContenido, formato, nivelCreatividad: creatividad, numIdeas: pedir,
-          usarTendencias,
-          tieneIdea, ideaTexto, tieneAnuncio, anuncioTexto, anuncioFecha, anuncioObjetivo,
-          tieneReferencia, referenciaUrl, referenciaNota,
-          evitarTitulos: recibidas.map(i => i.titulo),
-          instagram: instagramActual?.texto || null,
-          tiktok: tiktokActual?.texto || null,
-        })
-        const tanda = (data?.ideas || []).slice(0, pedir)
-        if (!tanda.length) break
-        recibidas = [...recibidas, ...tanda]
-        faltan -= pedir
-      }
-      // la IA a veces devuelve más de las pedidas: se respeta lo que eligió el
-      // usuario. La IA repite los ids 1..N en cada tanda: se renumeran.
-      const lote = Date.now()
-      const nuevas = recibidas.slice(0, nIdeas).map((idea, i) => ({
-        ...idea, id: `${lote}_${i + 1}`, ...(formato !== 'todos' ? { formato } : {}),
-      }))
-      setIdeas(nuevas)
-      const temaDisplay = tema || (tieneIdea ? ideaTexto : tieneAnuncio ? anuncioTexto : referenciaUrl) || ''
-      const entrada = { tema: temaDisplay, cliente: clienteData?.nombre || 'Sin cliente', numIdeas: nuevas.length, fecha: new Date().toISOString(), ideas: nuevas }
-      const nuevo = [entrada, ...historial].slice(0, 5)
-      setHistorial(nuevo); lsSet(LS_HISTORIAL, nuevo)
+      await ejecutar({
+        tipo: 'lluvia-ideas', clave: claveGenerar,
+        titulo: `${modoLiteral ? 'Adaptar idea' : 'Ideas'}${temaDisplay ? ` «${temaDisplay}»` : ''} · ${clienteData?.nombre || 'Sin cliente'}`,
+        clienteId,
+        destino: { ruta: '/lluvia-de-ideas' },
+      }, async () => {
+        // Más de 15 ideas no caben en una respuesta de la IA: se piden en tandas
+        // de hasta 15, y cada tanda sabe qué títulos no debe repetir
+        let recibidas = []
+        for (let faltan = nIdeas; faltan > 0 && recibidas.length < nIdeas;) {
+          const pedir = Math.min(15, faltan)
+          const data = await generarLluviaIdeas(clienteData, tema, {
+            tiposContenido, formato, nivelCreatividad: creatividad, numIdeas: pedir,
+            usarTendencias,
+            tieneIdea, ideaTexto, tieneAnuncio, anuncioTexto, anuncioFecha, anuncioObjetivo,
+            tieneReferencia, referenciaUrl, referenciaNota,
+            evitarTitulos: recibidas.map(i => i.titulo),
+            instagram: instagramActual?.texto || null,
+            tiktok: tiktokActual?.texto || null,
+          })
+          const tanda = (data?.ideas || []).slice(0, pedir)
+          if (!tanda.length) break
+          recibidas = [...recibidas, ...tanda]
+          faltan -= pedir
+        }
+        // la IA a veces devuelve más de las pedidas: se respeta lo que eligió el
+        // usuario. La IA repite los ids 1..N en cada tanda: se renumeran.
+        const lote = Date.now()
+        const nuevas = recibidas.slice(0, nIdeas).map((idea, i) => ({
+          ...idea, id: `${lote}_${i + 1}`, ...(formato !== 'todos' ? { formato } : {}),
+        }))
+        setIdeas(nuevas)
+        // El historial se relee de localStorage: si la página se cerró mientras
+        // generaba, es de ahí de donde la abre el «Ver» de la barra
+        const entrada = { tema: temaDisplay, cliente: clienteData?.nombre || 'Sin cliente', clienteId, numIdeas: nuevas.length, fecha: new Date().toISOString(), ideas: nuevas }
+        const nuevo = [entrada, ...lsGet(LS_HISTORIAL, [])].slice(0, 5)
+        setHistorial(nuevo); lsSet(LS_HISTORIAL, nuevo)
+        return {
+          texto: `${nuevas.length} ${nuevas.length === 1 ? 'idea' : 'ideas'}`,
+          ver: { ruta: '/lluvia-de-ideas', state: { sesionLluvia: entrada.fecha } },
+        }
+      })
     } catch (e) { setError(e.message || 'Error al generar ideas') }
     finally { setGenerando(false) }
   }
@@ -372,17 +411,30 @@ export default function LluviaDeIdeas({ clienteId: clienteIdFijo = null, cliente
   // mes salen abajo (IdeasGuardadasMes) para generar sus guiones de una vez.
   // Vídeo ⇄ carrusel en una idea recién generada; si ya está guardada, también en la guardada
   // (y reescribe su texto para ese formato: nada de "carrusel de 5 fotos" en un vídeo)
-  const [cambiandoFormato, setCambiandoFormato] = useState(null)
+  // Va a la cola de generaciones (sigue al cambiar de página); si la idea ya
+  // estaba guardada, el cambio se guarda aunque la página se haya cerrado
+  const [cambiandoFormatoAqui, setCambiandoFormato] = useState(null)
+  const formatoEnCurso = ideas.find(i => enCurso(`lluvia-formato-${i.id}`))
+  const cambiandoFormato = cambiandoFormatoAqui || formatoEnCurso?.id || null
   const handleCambiarFormato = async (idea) => {
     if (cambiandoFormato) return
     const formato = otroFormato(formatoDe(idea))
     setCambiandoFormato(idea.id)
-    const nueva = await reescribirIdea(clienteData, idea, { formato, sinTexto: esSinTexto(idea) }).catch(() => null)
-    const cambios = { formato, ...(nueva || {}) }
-    setIdeas(prev => prev.map(x => x.id === idea.id ? { ...x, ...cambios } : x))
-    const dbId = savedMap[`${idea.id}_${clienteId}`]
-    if (dbId) { await actualizarIdea(dbId, cambios); refetchGuardadas() }
-    setCambiandoFormato(null)
+    try {
+      await ejecutar({
+        tipo: 'idea-formato', clave: `lluvia-formato-${idea.id}`,
+        titulo: `Pasar a ${etiquetaFormato(formato).toLowerCase()} «${idea.titulo || 'Sin título'}» · ${clienteData?.nombre || 'Sin cliente'}`,
+        clienteId,
+        destino: { ruta: '/lluvia-de-ideas' },
+      }, async () => {
+        const nueva = await reescribirIdea(clienteData, idea, { formato, sinTexto: esSinTexto(idea) }).catch(() => null)
+        const cambios = { formato, ...(nueva || {}) }
+        setIdeas(prev => prev.map(x => x.id === idea.id ? { ...x, ...cambios } : x))
+        const dbId = savedMap[`${idea.id}_${clienteId}`]
+        if (dbId) { await actualizarIdea(dbId, cambios); refetchGuardadas() }
+      })
+    } catch { /* reescribirIdea ya cae a solo cambiar el formato */ }
+    finally { setCambiandoFormato(null) }
   }
 
   // Editor de "Desarrollar": guarda la idea editada (recién generada o ya

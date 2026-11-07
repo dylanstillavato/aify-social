@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { ImagePlus, Sparkles, Trash2, ArrowUp, ArrowDown, Plus, Download, Save, Send, X, FolderOpen } from 'lucide-react'
 import CabeceraHerramientaInstagram from '../components/CabeceraHerramientaInstagram'
 import { Tarjeta, Aviso, Chip } from '../components/instagramUi'
@@ -7,6 +8,8 @@ import { generarSecuenciaHistorias, PLANTILLAS_HISTORIA, FONDOS_HISTORIA, STICKE
 import { getPostsCliente, crearPost } from '../hooks/useCalendario'
 import { getPublicacionesInstagram, programarPublicacionInstagram } from '../services/instagram'
 import { supabase } from '../services/supabase'
+import { useGeneracionDePantalla } from '../hooks/useGeneraciones'
+import { useClienteActivo } from '../hooks/useClienteActivo'
 import {
   listarSecuencias, guardarSecuencia, borrarSecuencia, prefijoSecuencia, subirArchivo, descargarArchivo,
 } from '../services/historiasSecuencias'
@@ -82,6 +85,15 @@ function Secuencias({ cliente }) {
   const [recientes, setRecientes] = useState([])
   const [ig, setIg] = useState(null)
   const [programar, setProgramar] = useState({ abierto: false, fecha: hoyISO(), hora: '10:00' })
+  // Generar va a la cola de generaciones: sigue aunque se cambie de página y
+  // sale en la barra. Si al terminar la página ya no está abierta, la
+  // secuencia se guarda sola y el «Ver» de la barra la abre aquí.
+  const { ejecutar, enCurso } = useGeneracionDePantalla()
+  const claveGenerar = `historias-${cliente.id}`
+  const montadoRef = useRef(true)
+  useEffect(() => { montadoRef.current = true; return () => { montadoRef.current = false } }, [])
+  const location = useLocation()
+  const navigate = useNavigate()
 
   // Logo del kit de marca
   useEffect(() => {
@@ -151,17 +163,35 @@ function Secuencias({ cliente }) {
     setError(null)
     setAviso(null)
     setTrabajo('La IA está viendo las fotos y escribiendo la secuencia…')
+    const fotosUsadas = fotos
     try {
-      const fotosIA = await Promise.all(fotos.map(f => fotoParaIA(f.bitmap)))
-      const res = await generarSecuenciaHistorias(cliente, {
-        objetivo,
-        fotos: fotosIA,
-        numHistorias: num ? Number(num) : null,
-        anteriores: anteriores.slice(0, 5).map(a => ({ titulo: a.titulo, titulares: (a.historias || []).map(h => h.titular) })),
-        postsRecientes: recientes,
+      await ejecutar({
+        tipo: 'secuencia-historias', clave: claveGenerar,
+        titulo: `Secuencia de historias · ${cliente.nombre}`,
+        clienteId: cliente.id,
+        destino: { ruta: '/instagram/historias' },
+      }, async (avanzar) => {
+        const fotosIA = await Promise.all(fotosUsadas.map(f => fotoParaIA(f.bitmap)))
+        const res = await generarSecuenciaHistorias(cliente, {
+          objetivo,
+          fotos: fotosIA,
+          numHistorias: num ? Number(num) : null,
+          anteriores: anteriores.slice(0, 5).map(a => ({ titulo: a.titulo, titulares: (a.historias || []).map(h => h.titular) })),
+          postsRecientes: recientes,
+        })
+        const nueva = { id: crypto.randomUUID(), ...res }
+        setSecuencia(nueva)
+        setGuardada(false)
+        if (montadoRef.current) return null
+        // Página cerrada: las fotos solo viven en memoria, así que se guarda
+        // ya para poder abrirla luego
+        avanzar(0, 'Guardando la secuencia…')
+        await guardar(nueva, fotosUsadas)
+        return {
+          texto: nueva.titulo || 'Secuencia guardada',
+          ver: { ruta: '/instagram/historias', state: { abrirSecuencia: nueva.id, clienteId: cliente.id } },
+        }
       })
-      setSecuencia({ id: crypto.randomUUID(), ...res })
-      setGuardada(false)
     } catch (err) {
       setError(err.message || 'No se pudo generar la secuencia')
     } finally {
@@ -190,11 +220,11 @@ function Secuencias({ cliente }) {
   }
 
   // Historias a tamaño real (1080×1920) en JPEG
-  const historiasJpeg = async () => {
+  const historiasJpeg = async (sec = secuencia, fts = fotos) => {
     const f = await cargarFuentes(fuenteId)
     const marca = { paleta, fuentes: { titulo: f.titulo, cuerpo: f.cuerpo }, logo }
-    return Promise.all(secuencia.historias.map(h =>
-      canvasAJpeg(dibujarHistoria(document.createElement('canvas'), h, h.foto !== null ? fotos[h.foto]?.bitmap : null, marca))))
+    return Promise.all(sec.historias.map(h =>
+      canvasAJpeg(dibujarHistoria(document.createElement('canvas'), h, h.foto !== null ? fts[h.foto]?.bitmap : null, marca))))
   }
 
   const descargar = async () => {
@@ -217,27 +247,29 @@ function Secuencias({ cliente }) {
     }
   }
 
-  // Sube fotos originales e historias al bucket y guarda la fila.
-  const guardar = async () => {
+  // Sube fotos originales e historias al bucket y guarda la fila. Por
+  // defecto, la secuencia y las fotos de la pantalla; al generar con la
+  // página cerrada, las de esa generación.
+  const guardar = async (sec = secuencia, fts = fotos) => {
     if (!supabase) throw new Error('Guardar necesita la base de datos conectada')
-    const prefijo = await prefijoSecuencia(cliente.id, secuencia.id)
+    const prefijo = await prefijoSecuencia(cliente.id, sec.id)
     const rutasFotos = []
-    for (let i = 0; i < fotos.length; i++) {
-      setTrabajo(`Guardando fotos (${i + 1} de ${fotos.length})…`)
-      rutasFotos[i] = fotos[i].ruta || await subirArchivo(`${prefijo}foto-${fotos[i].id}.jpg`, await bitmapAJpeg(fotos[i].bitmap))
+    for (let i = 0; i < fts.length; i++) {
+      setTrabajo(`Guardando fotos (${i + 1} de ${fts.length})…`)
+      rutasFotos[i] = fts[i].ruta || await subirArchivo(`${prefijo}foto-${fts[i].id}.jpg`, await bitmapAJpeg(fts[i].bitmap))
     }
     setFotos(fs => fs.map((f, i) => ({ ...f, ruta: rutasFotos[i] })))
     setTrabajo('Guardando historias…')
-    const blobs = await historiasJpeg()
+    const blobs = await historiasJpeg(sec, fts)
     const historias = []
     for (let i = 0; i < blobs.length; i++) {
-      const h = secuencia.historias[i]
+      const h = sec.historias[i]
       const render = await subirArchivo(`${prefijo}historia-${i + 1}.jpg`, blobs[i])
       historias.push({ ...h, foto_ruta: h.foto !== null ? rutasFotos[h.foto] : null, render_ruta: render })
     }
     await guardarSecuencia({
-      id: secuencia.id, clienteId: cliente.id, organizacionId: cliente.organizacionId,
-      titulo: secuencia.titulo, objetivo, historias, estilo: { fuenteId },
+      id: sec.id, clienteId: cliente.id, organizacionId: cliente.organizacionId,
+      titulo: sec.titulo, objetivo, historias, estilo: { fuenteId },
     })
     setGuardada(true)
     listarSecuencias(cliente.id).then(setAnteriores).catch(() => {})
@@ -331,7 +363,19 @@ function Secuencias({ cliente }) {
   }
 
   const puedeProgramar = ig?.conectado && ig?.permisosOk
-  const ocupado = Boolean(trabajo)
+  // «Ver» de la barra de generaciones: abre la secuencia que se generó (y se
+  // guardó sola) con la página cerrada
+  const abrirPendiente = location.state?.abrirSecuencia
+  useEffect(() => {
+    if (!abrirPendiente) return
+    const a = anteriores.find(x => x.id === abrirPendiente)
+    if (!a) return
+    navigate(location.pathname, { replace: true, state: {} })
+    abrir(a) // eslint-disable-line react-hooks/set-state-in-effect
+  }, [abrirPendiente, anteriores]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const generandoFuera = !!enCurso(claveGenerar)
+  const ocupado = Boolean(trabajo) || generandoFuera
 
   return (
     <>
@@ -394,7 +438,7 @@ function Secuencias({ cliente }) {
         {!iv.colorPrimario && (
           <p style={{ ...textoSecundario, fontSize: 11, marginTop: 10 }}>Este cliente no tiene colores en su kit de marca (Perfil → Kit de marca); se usan colores neutros.</p>
         )}
-        {trabajo && <p style={{ ...textoSecundario, marginTop: 12, fontWeight: 600 }}>{trabajo}</p>}
+        {(trabajo || generandoFuera) && <p style={{ ...textoSecundario, marginTop: 12, fontWeight: 600 }}>{trabajo || 'La IA está viendo las fotos y escribiendo la secuencia…'}</p>}
       </Tarjeta>
 
       {secuencia && (
@@ -495,6 +539,13 @@ function Secuencias({ cliente }) {
 }
 
 export default function HistoriasSecuencias() {
+  // «Ver» de la barra de generaciones con otro cliente activo: se cambia al de la secuencia
+  const location = useLocation()
+  const { clienteActivoId, setClienteActivoId } = useClienteActivo()
+  const clienteDeSecuencia = location.state?.abrirSecuencia ? location.state.clienteId : null
+  useEffect(() => {
+    if (clienteDeSecuencia && String(clienteDeSecuencia) !== String(clienteActivoId)) setClienteActivoId(String(clienteDeSecuencia))
+  }, [clienteDeSecuencia]) // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <CabeceraHerramientaInstagram
       titulo="Secuencias de historias"
