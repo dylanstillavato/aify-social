@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { X, Sparkles, RefreshCw, Copy, Check, CalendarPlus } from 'lucide-react'
 import { generarVariantesTrial } from '../services/ai'
 import { crearPost } from '../hooks/useCalendario'
 import { useClienteActivo } from '../hooks/useClienteActivo'
+import { useGeneraciones, useGeneracionDePantalla } from '../hooks/useGeneraciones'
 import { PREFIJO_TRIAL } from '../utils/trialReels'
 import { Aviso, Chip } from './instagramUi'
 import { labelStyle, textoSecundario, botonSecundario, botonPrimario, campoStyle } from './instagramEstilos'
@@ -22,6 +23,12 @@ const CAMPOS = [
   ['caption', 'Descripción'],
   ['ajusteVisual', 'Ajuste visual para el editor'],
 ]
+
+// Últimas variantes de cada reel (`${clienteId}-${publicacionId}`): la
+// generación va a la cola de generaciones y sigue aunque se cierre el modal o
+// se cambie de página; al volver a abrirlo (o con «Ver» de la barra) se
+// enseñan estas en vez de generar otras. Viven mientras la pestaña siga abierta.
+const ultimasVariantes = new Map()
 
 const mañana = () => {
   const d = new Date(Date.now() + 24 * 60 * 60 * 1000)
@@ -132,27 +139,63 @@ export default function VariantesTrialModal({ cliente, publicacion, onClose }) {
   const [fase, setFase] = useState('cargando') // cargando | listo | error
   const [variantes, setVariantes] = useState([])
   const [error, setError] = useState(null)
+  const location = useLocation()
+  const { terminados } = useGeneraciones()
+  const { ejecutar, enCurso } = useGeneracionDePantalla()
+  const clave = `trial-${cliente?.id}-${publicacion?.id}`
+  // Al abrir con la generación aún en marcha (lanzada antes de cerrar el modal)
+  const [esperando, setEsperando] = useState(false)
+  const iniciadoRef = useRef(false)
 
-  const generar = useCallback(async () => {
-    setFase('cargando')
-    setError(null)
+  const lanzarGeneracion = useCallback(async () => {
     try {
-      setVariantes(await generarVariantesTrial(cliente, publicacion))
+      await ejecutar({
+        tipo: 'variantes-trial', clave,
+        titulo: `Variantes Trial «${publicacion?.texto?.slice(0, 40) || 'Reel'}» · ${cliente?.nombre || ''}`,
+        clienteId: cliente?.id,
+        destino: {
+          ruta: `${location.pathname}${location.search}`,
+          state: { variantesTrial: publicacion, variantesTrialCliente: cliente?.id },
+        },
+      }, async () => {
+        ultimasVariantes.delete(clave)
+        const v = await generarVariantesTrial(cliente, publicacion)
+        ultimasVariantes.set(clave, v)
+        setVariantes(v)
+        return { texto: `${v.length} variantes` }
+      })
       setFase('listo')
     } catch (err) {
       setError(err.message || 'No se pudieron generar las variantes')
       setFase('error')
     }
-  }, [cliente, publicacion])
+  }, [ejecutar, clave, cliente, publicacion, location.pathname, location.search])
 
-  // Primera tanda al abrir (el estado inicial ya es "cargando").
+  const generar = useCallback(() => {
+    setFase('cargando')
+    setError(null)
+    return lanzarGeneracion()
+  }, [lanzarGeneracion])
+
+  // Al abrir (el estado inicial ya es "cargando"): las variantes que ya
+  // había, esperar a la generación en marcha o pedir la primera tanda
   useEffect(() => {
-    let vivo = true
-    generarVariantesTrial(cliente, publicacion)
-      .then(v => { if (vivo) { setVariantes(v); setFase('listo') } })
-      .catch(err => { if (vivo) { setError(err.message || 'No se pudieron generar las variantes'); setFase('error') } })
-    return () => { vivo = false }
-  }, [cliente, publicacion])
+    if (iniciadoRef.current) return
+    iniciadoRef.current = true
+    const guardadas = ultimasVariantes.get(clave)
+    if (guardadas) { setVariantes(guardadas); setFase('listo') } // eslint-disable-line react-hooks/set-state-in-effect
+    else if (enCurso(clave)) setEsperando(true)
+    else lanzarGeneracion()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // La generación que se esperaba ha terminado
+  useEffect(() => {
+    if (!esperando || enCurso(clave)) return
+    setEsperando(false) // eslint-disable-line react-hooks/set-state-in-effect
+    const guardadas = ultimasVariantes.get(clave)
+    if (guardadas) { setVariantes(guardadas); setFase('listo') }
+    else { setError('No se pudieron generar las variantes'); setFase('error') }
+  }, [esperando, terminados, enCurso, clave])
 
   useEffect(() => {
     const alPulsar = (e) => { if (e.key === 'Escape') onClose() }

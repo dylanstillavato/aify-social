@@ -177,7 +177,15 @@ function SeguimientoInstagram({ cliente, conDms }) {
   const [conectando, setConectando] = useState(false)
   const [errorAccion, setErrorAccion] = useState(null)
   const [estudio, setEstudio] = useState(null) // { publicacion } | { archivo }
-  const [variantes, setVariantes] = useState(null) // publicación de la que sacar variantes Trial
+  // Publicación de la que sacar variantes Trial. Con «Ver» en la barra de
+  // generaciones se llega con ella en el estado de la ruta y el modal se reabre
+  const [variantes, setVariantes] = useState(null)
+  const variantesDeRuta = location.state?.variantesTrial
+  useEffect(() => {
+    if (!variantesDeRuta || String(location.state.variantesTrialCliente) !== String(clienteId)) return
+    setVariantes(variantesDeRuta) // eslint-disable-line react-hooks/set-state-in-effect
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: {} })
+  }, [variantesDeRuta, clienteId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Limpia ?instagram=... de la URL tras leerlo, para que no reaparezca.
   useEffect(() => {
