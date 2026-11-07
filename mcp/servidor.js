@@ -362,6 +362,61 @@ export function crearServidorMcp(dependencias, { organizacionId, userId }) {
     }
   }))
 
+  servidor.registerTool('editar_guion', {
+    title: 'Editar guion',
+    description: 'Corrige el guion de un post (de ver_calendario o ver_guion): las frases del desarrollo, el copy, los hashtags o las notas. Solo cambia los campos que mandes. No se puede editar un post que se está publicando o ya publicado desde Aify.',
+    inputSchema: {
+      post_id: idSchema('id del post'),
+      frases: z.array(z.string()).optional().describe('Frases del desarrollo del guion (sustituyen a las de ahora, en este orden)'),
+      copy: z.string().optional().describe('Copy (descripción) del post'),
+      hashtags: z.string().optional().describe('Hashtags del post, en un texto (p. ej. "#cafe #barcelona")'),
+      notas: z.string().optional().describe('Notas internas del post'),
+    },
+  }, herramienta('editar_guion', async ({ post_id, frases, copy, hashtags, notas }) => {
+    if (frases === undefined && copy === undefined && hashtags === undefined && notas === undefined) {
+      throw new ErrorMcp('No hay nada que cambiar: manda al menos uno de frases, copy, hashtags o notas.')
+    }
+    const { post, cliente } = await postDeOrganizacion(post_id)
+    // Lo que se está publicando o ya salió desde Aify no se cambia (como mover_post)
+    const [pub, pubTikTok] = await Promise.all([publicacionDelPost(post.id), publicacionTikTokDelPost(post.id)])
+    for (const [p, red] of [[pub, 'Instagram'], [pubTikTok, 'TikTok']]) {
+      if (p && ['procesando', 'publicado'].includes(p.estado)) {
+        throw new ErrorMcp(p.estado === 'publicado' ? `Este post ya está publicado en ${red} desde Aify: no se puede editar.` : `Este post se está publicando en ${red} ahora mismo: no se puede editar.`)
+      }
+    }
+    const cambios = {}
+    if (frases !== undefined) {
+      const limpias = frases.map(f => f.trim()).filter(Boolean)
+      // Sin guion, se crea con la misma forma que crear_post (guionParaDB)
+      cambios.guion = post.guion && typeof post.guion === 'object'
+        ? { ...post.guion, contenido: { ...(post.guion.contenido || {}), frases: limpias } }
+        : { contenido: { frases: limpias } }
+    }
+    if (copy !== undefined) cambios.copy = copy
+    if (hashtags !== undefined) cambios.hashtags = hashtags
+    if (notas !== undefined) cambios.notas = notas
+    const { error } = await supabaseAdmin.from('calendario_posts').update(cambios).eq('id', post.id)
+    comprobar(error, 'el post')
+    const editado = { ...post, ...cambios }
+    // Lo mismo que devuelve ver_guion
+    return {
+      cliente: cliente.nombre,
+      id: editado.id,
+      titulo: editado.titulo,
+      fecha: editado.en_calendario === false ? null : editado.fecha,
+      hora: editado.hora ? String(editado.hora).slice(0, 5) : null,
+      red: editado.red,
+      formato: editado.formato,
+      concepto: editado.concepto,
+      objetivo: editado.objetivo,
+      guion: editado.guion,
+      copy: editado.copy,
+      hashtags: editado.hashtags,
+      notas: editado.notas,
+      aprobacion: editado.aprobacion_estado || null,
+    }
+  }))
+
   servidor.registerTool('ver_metricas', {
     title: 'Ver métricas',
     description: 'Métricas que guarda Aify de un cliente. Instagram: la cuenta conectada y las de cada reel a las 24 h de publicarse (visualizaciones, alcance, me gusta, comentarios, guardados, compartidos, tiempo medio visto y % de saltos). TikTok: la cuenta conectada, la última foto diaria de la cuenta (seguidores, me gustas, vídeos, visualizaciones sumadas) y las de cada vídeo a las 24 h (visualizaciones, me gustas, comentarios, compartidos; TikTok no da alcance ni retención).',
