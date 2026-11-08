@@ -7,6 +7,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import crypto from 'node:crypto'
 import { Readable } from 'node:stream'
 import { montarMcp } from './mcp/servidor.js'
+import { crearCancelarPublicacion } from './mcp/publicaciones.js'
 import { crearPizarras, ErrorPizarra } from './mcp/pizarras.js'
 import { crearOAuthMcp } from './mcp/oauth.js'
 import { crearAifyos } from './mcp/aifyos.js'
@@ -3174,14 +3175,16 @@ app.put('/api/instagram/publicar/:clienteId/:postId', requireAuth, requireClient
   res.json({ publicacion: resultado.publicacion })
 })
 
+// Los DELETE de Instagram y TikTok y el MCP (cancelar_publicacion)
+const cancelarPublicacion = crearCancelarPublicacion({
+  supabaseAdmin,
+  paraCliente: { instagram: publicacionParaCliente, tiktok: publicacionTikTokParaCliente },
+})
+
 app.delete('/api/instagram/publicar/:clienteId/:postId', requireAuth, requireClienteInstagram(), async (req, res) => {
-  const { data, error } = await supabaseAdmin.from('instagram_publicaciones')
-    .update({ estado: 'cancelado', actualizado_en: new Date().toISOString() })
-    .eq('post_id', req.params.postId).eq('cliente_id', req.clienteInstagram.id).in('estado', ['programado', 'error'])
-    .select('*').maybeSingle()
-  if (error) return res.status(500).json({ error: 'No se pudo cancelar' })
-  if (!data) return res.status(409).json({ error: 'Solo se puede cancelar una publicación programada o con error' })
-  res.json({ publicacion: publicacionParaCliente(data) })
+  const resultado = await cancelarPublicacion({ red: 'instagram', clienteId: req.clienteInstagram.id, postId: req.params.postId })
+  if (resultado.error) return res.status(resultado.estado).json({ error: resultado.error })
+  res.json({ publicacion: resultado.publicacion })
 })
 
 async function actualizarPublicacion(id, campos) {
@@ -4173,13 +4176,9 @@ app.patch('/api/tiktok/publicar/:clienteId/:postId', requireAuth, requireCliente
 })
 
 app.delete('/api/tiktok/publicar/:clienteId/:postId', requireAuth, requireClienteTikTok(), async (req, res) => {
-  const { data, error } = await supabaseAdmin.from('tiktok_publicaciones')
-    .update({ estado: 'cancelado', actualizado_en: new Date().toISOString() })
-    .eq('post_id', req.params.postId).eq('cliente_id', req.clienteTikTok.id).in('estado', ['programado', 'error'])
-    .select('*').maybeSingle()
-  if (error) return res.status(500).json({ error: 'No se pudo cancelar' })
-  if (!data) return res.status(409).json({ error: 'Solo se puede cancelar una publicación programada o con error' })
-  res.json({ publicacion: publicacionTikTokParaCliente(data) })
+  const resultado = await cancelarPublicacion({ red: 'tiktok', clienteId: req.clienteTikTok.id, postId: req.params.postId })
+  if (resultado.error) return res.status(resultado.estado).json({ error: resultado.error })
+  res.json({ publicacion: resultado.publicacion })
 })
 
 async function actualizarPublicacionTikTok(id, campos) {
@@ -4874,8 +4873,10 @@ montarMcp(app, {
   supabaseAdmin,
   requireClaveApi,
   programarPublicacion,
+  cancelarPublicacion,
   metricasDirectasReel,
   bucketPublicaciones: BUCKET_PUBLICACIONES,
+  urlFrontend: FRONTEND_ORIGINS[0] || 'http://localhost:5174',
   // TikTok: las mismas funciones que los endpoints de la web
   programarPublicacionTikTok,
   moverPublicacionTikTok,
