@@ -244,7 +244,7 @@ export function crearServidorMcp(dependencias, { organizacionId, userId }) {
       const ids = delMes.map(p => p.id)
       const [{ data: publicaciones, error: errorPub }, { data: publicacionesTikTok, error: errorTikTok }] = await Promise.all([
         supabaseAdmin.from('instagram_publicaciones')
-          .select('post_id, tipo, estado, publicar_en, publicado_en, permalink, error')
+          .select('post_id, tipo, estado, publicar_en, publicado_en, permalink, error, es_trial, trial_graduacion')
           .in('post_id', ids),
         supabaseAdmin.from('tiktok_publicaciones')
           .select('post_id, tipo, estado, estado_tiktok, privacidad, publicar_en, publicado_en, enlace, error')

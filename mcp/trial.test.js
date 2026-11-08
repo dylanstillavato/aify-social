@@ -11,20 +11,42 @@ const ORG = '11111111-1111-4111-8111-111111111111'
 const CLIENTE = '22222222-2222-4222-8222-222222222222'
 const POST = '33333333-3333-4333-8333-333333333333'
 const PUBLICADO = '44444444-4444-4444-8444-444444444444'
+const TRIAL = '66666666-6666-4666-8666-666666666666'
+const NORMAL = '77777777-7777-4777-8777-777777777777'
 const VIDEO = `${ORG}/${CLIENTE}/a.mp4`
 const JPG = `${ORG}/${CLIENTE}/p.jpg`
 
 const filas = {
   clientes: [{ id: CLIENTE, nombre: 'Prueba', organizacion_id: ORG, user_id: 'u' }],
-  calendario_posts: [{ id: POST, cliente_id: CLIENTE, fecha: '2099-01-02', hora: '10:00:00', titulo: 'x' }, { id: PUBLICADO, cliente_id: CLIENTE }],
-  instagram_publicaciones: [{ post_id: PUBLICADO, estado: 'publicado', ig_media_id: 'm1', es_trial: true, publicado_en: new Date(Date.now() - 72 * 3600e3).toISOString(), permalink: 'https://www.instagram.com/reel/z/' }],
+  calendario_posts: [
+    { id: POST, cliente_id: CLIENTE, fecha: '2099-01-02', hora: '10:00:00', titulo: 'x' }, { id: PUBLICADO, cliente_id: CLIENTE },
+    { id: TRIAL, cliente_id: CLIENTE, fecha: '2099-03-05', hora: '12:00:00', titulo: 'trial', formato: 'reel' },
+    { id: NORMAL, cliente_id: CLIENTE, fecha: '2099-03-06', hora: '12:00:00', titulo: 'normal', formato: 'reel' },
+  ],
+  instagram_publicaciones: [
+    { post_id: PUBLICADO, estado: 'publicado', ig_media_id: 'm1', es_trial: true, publicado_en: new Date(Date.now() - 72 * 3600e3).toISOString(), permalink: 'https://www.instagram.com/reel/z/' },
+    { post_id: TRIAL, tipo: 'reel', estado: 'programado', publicar_en: '2099-03-05T12:00:00+01:00', es_trial: true, trial_graduacion: 'SS_PERFORMANCE' },
+    { post_id: NORMAL, tipo: 'reel', estado: 'programado', publicar_en: '2099-03-06T12:00:00+01:00', es_trial: false, trial_graduacion: null },
+  ],
+}
+
+// Respeta las columnas del select: si la herramienta no pide un campo, no le llega
+function soloColumnas(fila, columnas) {
+  if (!columnas || columnas.trim() === '*') return fila
+  return Object.fromEntries(columnas.split(',').map(c => c.trim()).filter(c => c in fila).map(c => [c, fila[c]]))
 }
 
 function consulta(nombre) {
   const fs = []
-  let lista = () => (filas[nombre] || []).filter(f => fs.every(([c, v]) => f[c] === v))
+  let columnas = '*'
+  let lista = () => (filas[nombre] || []).filter(f => fs.every(cumple => cumple(f))).map(f => soloColumnas(f, columnas))
   const q = {
-    select: () => q, eq: (c, v) => { fs.push([c, v]); return q }, in: () => q, order: () => q, limit: () => q, gte: () => q, lte: () => q, is: () => q, neq: () => q, not: () => q,
+    select: (c) => { columnas = c; return q },
+    eq: (c, v) => { fs.push(f => f[c] === v); return q },
+    in: (c, vs) => { fs.push(f => vs.includes(f[c])); return q },
+    gte: (c, v) => { fs.push(f => f[c] >= v); return q },
+    lt: (c, v) => { fs.push(f => f[c] < v); return q },
+    order: () => q, limit: () => q, lte: () => q, is: () => q, neq: () => q, not: () => q,
     maybeSingle: async () => ({ data: lista()[0] || null, error: null }),
     single: async () => ({ data: lista()[0] || null, error: lista()[0] ? null : { message: 'sin fila' } }),
     then: (ok) => ok({ data: lista(), error: null }),
@@ -136,4 +158,14 @@ test('ver_metricas: sin publicar o con Meta caída lo dice, no inventa', async (
   assert.equal(caido.reel_directo.disponible, false)
   const ajeno = await llamar('ver_metricas', { cliente_id: CLIENTE, post_id: '55555555-5555-4555-8555-555555555555' })
   assert.match(ajeno.error, /Ningún|ningún/)
+})
+
+test('ver_calendario dice si un reel programado es Trial y con qué graduación', async () => {
+  const r = await llamar('ver_calendario', { cliente_id: CLIENTE, mes: '2099-03' })
+  const trial = r.posts.find(p => p.id === TRIAL)
+  assert.equal(trial.instagram.es_trial, true)
+  assert.equal(trial.instagram.trial_graduacion, 'SS_PERFORMANCE')
+  const normal = r.posts.find(p => p.id === NORMAL)
+  assert.equal(normal.instagram.es_trial, false)
+  assert.equal(normal.instagram.trial_graduacion, null)
 })
