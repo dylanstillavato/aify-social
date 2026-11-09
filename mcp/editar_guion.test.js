@@ -40,17 +40,18 @@ function consulta(nombre) {
   const fs = []
   let cambios = null
   const lista = () => (filas[nombre] || []).filter(f => fs.every(([c, v]) => f[c] === v))
+  const aplicar = () => {
+    if (cambios) {
+      for (const f of lista()) { Object.assign(f, cambios); actualizaciones.push({ tabla: nombre, id: f.id, cambios }) }
+      cambios = null
+    }
+  }
   const q = {
     select: () => q, eq: (c, v) => { fs.push([c, v]); return q }, in: () => q, order: () => q, limit: () => q,
     update: (c) => { cambios = c; return q },
     maybeSingle: async () => ({ data: lista()[0] || null, error: null }),
-    single: async () => ({ data: lista()[0] || null, error: lista()[0] ? null : { message: 'sin fila' } }),
-    then: (ok) => {
-      if (cambios) {
-        for (const f of lista()) { Object.assign(f, cambios); actualizaciones.push({ tabla: nombre, id: f.id, cambios }) }
-      }
-      return ok({ data: lista(), error: null })
-    },
+    single: async () => { aplicar(); return { data: lista()[0] || null, error: lista()[0] ? null : { message: 'sin fila' } } },
+    then: (ok) => { aplicar(); return ok({ data: lista(), error: null }) },
   }
   return q
 }

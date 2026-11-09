@@ -3,6 +3,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import * as z from 'zod'
 import crypto from 'node:crypto'
 import { crearPizarras, ErrorPizarra, MAX_NODOS_POR_LLAMADA, TIPOS_SUBIDA_PIZARRA } from './pizarras.js'
+import { crearTareasPorGrabar } from './tareas.js'
 
 // ── MCP de Aify (docs/mcp.md) ─────────────────────────────────────────────────
 // Claude (Claude Code, Claude Desktop o claude.ai) usa Aify con herramientas.
@@ -27,6 +28,9 @@ import { crearPizarras, ErrorPizarra, MAX_NODOS_POR_LLAMADA, TIPOS_SUBIDA_PIZARR
 // Pizarras (0054_pizarras.sql): guardar_pizarra, listar_pizarras, ver_pizarra
 // y anadir_a_pizarra, para «Mira mi pizarra» de @Pictures. La lógica está
 // en mcp/pizarras.js, compartida con /api/pizarras de server.js.
+//
+// Operar desde AifyOS: aprobar_guion, crear_enlace_aprobacion,
+// cancelar_publicacion, ver_publicacion, marcar_grabado y editar_post.
 
 const MES_RE = /^\d{4}-(0[1-9]|1[0-2])$/
 const FECHA_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/
@@ -130,6 +134,25 @@ const comprobar = (error, que) => {
 const esTablaInexistente = (error) => error && (error.code === '42P01' || error.code === 'PGRST205')
 const esColumnaInexistente = (error) => error && (error.code === '42703' || error.code === 'PGRST204')
 
+// Lo que devuelven ver_guion y editar_guion
+const fichaGuion = (post, cliente) => ({
+  cliente: cliente.nombre,
+  id: post.id,
+  titulo: post.titulo,
+  fecha: post.en_calendario === false ? null : post.fecha,
+  hora: post.hora ? String(post.hora).slice(0, 5) : null,
+  red: post.red,
+  formato: post.formato,
+  concepto: post.concepto,
+  objetivo: post.objetivo,
+  guion: post.guion,
+  copy: post.copy,
+  hashtags: post.hashtags,
+  notas: post.notas,
+  aprobacion: post.aprobacion_estado || null,
+  aprobacion_comentario: post.aprobacion_comentario || null,
+})
+
 const redesActivas = (redes) => (redes && typeof redes === 'object' && !Array.isArray(redes)
   ? Object.keys(redes).filter(k => redes[k]?.activa)
   : (Array.isArray(redes) ? redes : []))
@@ -150,13 +173,14 @@ const CAMPOS_PERFIL = [
 ]
 
 export function crearServidorMcp(dependencias, { organizacionId, userId }) {
-  const { supabaseAdmin, programarPublicacion, metricasDirectasReel, bucketPublicaciones } = dependencias
+  const { supabaseAdmin, programarPublicacion, cancelarPublicacion, metricasDirectasReel, bucketPublicaciones, urlFrontend } = dependencias
   const {
     programarPublicacionTikTok, moverPublicacionTikTok, creadorTikTok, conexionTikTok, tiktokConfigurado,
     tiktokAuditada, permisoPublicarTikTok,
   } = dependencias
   const servidor = new McpServer({ name: 'aify', version: '1.0.0' })
   const pizarras = crearPizarras({ supabaseAdmin, bucket: bucketPublicaciones, organizacionId })
+  const tareasPorGrabar = crearTareasPorGrabar({ supabaseAdmin, organizacionId, userId })
 
   async function clienteDeOrganizacion(clienteId, columnas = '*') {
     const { data, error } = await supabaseAdmin
@@ -268,6 +292,7 @@ export function crearServidorMcp(dependencias, { organizacionId, userId }) {
         titulo: p.titulo,
         estado: p.estado,
         aprobacion: p.aprobacion_estado || null,
+        aprobacion_comentario: p.aprobacion_comentario || null,
         grabado: Boolean(p.grabado_en),
         tiene_guion: Boolean(p.guion),
         instagram: pub
@@ -338,82 +363,203 @@ export function crearServidorMcp(dependencias, { organizacionId, userId }) {
 
   servidor.registerTool('ver_guion', {
     title: 'Ver guion',
-    description: 'Guion completo de un post (de ver_calendario): guion, copy, hashtags y notas.',
+    description: 'Guion completo de un post (de ver_calendario): guion, copy, hashtags, notas, estado de la aprobación y comentario del cliente.',
     inputSchema: { post_id: idSchema('id del post') },
     annotations: { readOnlyHint: true },
   }, herramienta('ver_guion', async ({ post_id }) => {
     const { post, cliente } = await postDeOrganizacion(post_id)
     if (!post.guion && !post.copy) throw new ErrorMcp('Ese post todavía no tiene guion.')
-    return {
-      cliente: cliente.nombre,
-      id: post.id,
-      titulo: post.titulo,
-      fecha: post.en_calendario === false ? null : post.fecha,
-      hora: post.hora ? String(post.hora).slice(0, 5) : null,
-      red: post.red,
-      formato: post.formato,
-      concepto: post.concepto,
-      objetivo: post.objetivo,
-      guion: post.guion,
-      copy: post.copy,
-      hashtags: post.hashtags,
-      notas: post.notas,
-      aprobacion: post.aprobacion_estado || null,
-    }
+    return fichaGuion(post, cliente)
   }))
 
-  servidor.registerTool('editar_guion', {
-    title: 'Editar guion',
-    description: 'Corrige el guion de un post (de ver_calendario o ver_guion): las frases del desarrollo, el copy, los hashtags o las notas. Solo cambia los campos que mandes. No se puede editar un post que se está publicando o ya publicado desde Aify.',
-    inputSchema: {
-      post_id: idSchema('id del post'),
-      frases: z.array(z.string()).optional().describe('Frases del desarrollo del guion (sustituyen a las de ahora, en este orden)'),
-      copy: z.string().optional().describe('Copy (descripción) del post'),
-      hashtags: z.string().optional().describe('Hashtags del post, en un texto (p. ej. "#cafe #barcelona")'),
-      notas: z.string().optional().describe('Notas internas del post'),
-    },
-  }, herramienta('editar_guion', async ({ post_id, frases, copy, hashtags, notas }) => {
-    if (frases === undefined && copy === undefined && hashtags === undefined && notas === undefined) {
-      throw new ErrorMcp('No hay nada que cambiar: manda al menos uno de frases, copy, hashtags o notas.')
-    }
-    const { post, cliente } = await postDeOrganizacion(post_id)
-    // Lo que se está publicando o ya salió desde Aify no se cambia (como mover_post)
+  // Lo que se está publicando o ya salió desde Aify no se cambia (como mover_post)
+  async function exigirSinPublicar(post) {
     const [pub, pubTikTok] = await Promise.all([publicacionDelPost(post.id), publicacionTikTokDelPost(post.id)])
     for (const [p, red] of [[pub, 'Instagram'], [pubTikTok, 'TikTok']]) {
       if (p && ['procesando', 'publicado'].includes(p.estado)) {
         throw new ErrorMcp(p.estado === 'publicado' ? `Este post ya está publicado en ${red} desde Aify: no se puede editar.` : `Este post se está publicando en ${red} ahora mismo: no se puede editar.`)
       }
     }
-    const cambios = {}
-    if (frases !== undefined) {
-      const limpias = frases.map(f => f.trim()).filter(Boolean)
-      // Sin guion, se crea con la misma forma que crear_post (guionParaDB)
-      cambios.guion = post.guion && typeof post.guion === 'object'
-        ? { ...post.guion, contenido: { ...(post.guion.contenido || {}), frases: limpias } }
-        : { contenido: { frases: limpias } }
+    return { pub, pubTikTok }
+  }
+
+  servidor.registerTool('editar_guion', {
+    title: 'Editar guion',
+    description: 'Corrige el guion de un post (de ver_calendario o ver_guion): gancho, problema, promesa, frases del desarrollo, cierre, planos, copy, hashtags, notas o título. Solo cambia los campos que mandes. No se puede editar un post que se está publicando o ya publicado desde Aify. '
+      + 'OJO: si cambias el guion (gancho, problema, promesa, frases, cierre o planos), su aprobación vuelve a pendiente, también si ya estaba aprobado: la aprobación era de otra versión. El comentario del cliente se conserva. Copy, hashtags, notas y título no tocan la aprobación. La respuesta trae la aprobación como queda.',
+    inputSchema: {
+      post_id: idSchema('id del post'),
+      titulo: z.string().trim().min(1).max(120).optional().describe('Título del post'),
+      gancho: z.string().optional().describe('Gancho: la frase de los primeros segundos'),
+      problema: z.string().optional().describe('Texto del problema o identificación'),
+      promesa: z.string().optional().describe('Texto de la promesa o giro'),
+      frases: z.array(z.string()).optional().describe('Frases del desarrollo del guion (sustituyen a las de ahora, en este orden)'),
+      cierre: z.object({
+        remate: z.string().optional().describe('Vídeo: la frase de remate'),
+        cta: z.string().optional().describe('La llamada a la acción'),
+        texto: z.string().optional().describe('Carrusel: remate y llamada a la acción'),
+        imagen: z.string().optional().describe('Carrusel: qué imagen lleva'),
+      }).optional().describe('Cierre: solo cambian los campos que mandes'),
+      planos: z.array(z.object({
+        segundos: z.union([z.string(), z.number()]).optional().describe('Segundos del plano, p. ej. "0-3" (en carrusel, no se usa)'),
+        plano: z.string().optional().describe('Tipo de plano (en carrusel, "Portada" o "Slide 2")'),
+        visual: z.string().optional().describe('Qué se ve (en carrusel, la imagen)'),
+        dice: z.string().optional().describe('Qué se dice (en carrusel, el texto de la slide)'),
+      })).optional().describe('Planos del guion (sustituyen a todos los de ahora, en este orden)'),
+      copy: z.string().optional().describe('Copy (descripción) del post'),
+      hashtags: z.string().optional().describe('Hashtags del post, en un texto (p. ej. "#cafe #barcelona")'),
+      notas: z.string().optional().describe('Notas internas del post'),
+    },
+  }, herramienta('editar_guion', async ({ post_id, titulo, gancho, problema, promesa, frases, cierre, planos, copy, hashtags, notas }) => {
+    const delGuion = [gancho, problema, promesa, frases, cierre, planos].some(c => c !== undefined)
+    if (!delGuion && [titulo, copy, hashtags, notas].every(c => c === undefined)) {
+      throw new ErrorMcp('No hay nada que cambiar: manda al menos uno de gancho, problema, promesa, frases, cierre, planos, copy, hashtags, notas o titulo.')
     }
+    const { post, cliente } = await postDeOrganizacion(post_id)
+    await exigirSinPublicar(post)
+    const cambios = {}
+    if (delGuion) {
+      // Sin guion, se crea con la misma forma que crear_post (guionParaDB)
+      const guion = { ...(guionParaDB(post.guion) || {}) }
+      if (gancho !== undefined) guion.gancho = gancho
+      if (problema !== undefined) guion.problema = { ...(guion.problema || {}), texto: problema }
+      if (promesa !== undefined) guion.promesa = { ...(guion.promesa || {}), texto: promesa }
+      if (frases !== undefined) guion.contenido = { ...(guion.contenido || {}), frases: frases.map(f => f.trim()).filter(Boolean) }
+      if (cierre !== undefined) guion.cierre = { ...(guion.cierre || {}), ...cierre }
+      if (planos !== undefined) guion.planos = planos
+      cambios.guion = guion
+    }
+    if (titulo !== undefined) cambios.titulo = titulo
     if (copy !== undefined) cambios.copy = copy
     if (hashtags !== undefined) cambios.hashtags = hashtags
     if (notas !== undefined) cambios.notas = notas
+    // La fila que devuelve la base de datos ya lleva lo que haya hecho el trigger de la aprobación
+    const { data: editado, error } = await supabaseAdmin.from('calendario_posts').update(cambios).eq('id', post.id).select('*').single()
+    comprobar(error, 'el post')
+    return {
+      ...fichaGuion(editado, cliente),
+      ...(post.aprobacion_estado && !editado.aprobacion_estado ? { aviso: 'Al cambiar el guion, su aprobación ha vuelto a pendiente.' } : {}),
+    }
+  }))
+
+  servidor.registerTool('aprobar_guion', {
+    title: 'Aprobar guion',
+    description: 'Aprueba a mano el guion de un post (el cliente dio el ok por WhatsApp o en persona) o quita esa aprobación, igual que el botón de Guiones del mes. Al aprobar, el guion entra en el tablero de tareas con su tarjeta en «Por grabar»; al quitar la aprobación, esa tarjeta se va si nadie la ha empezado. El comentario del cliente se conserva. Con aprobado: false, solo se deshace un guion aprobado.',
+    inputSchema: {
+      post_id: idSchema('id del post'),
+      aprobado: z.boolean().describe('true aprueba; false lo devuelve a pendiente'),
+    },
+  }, herramienta('aprobar_guion', async ({ post_id, aprobado }) => {
+    const { post, cliente } = await postDeOrganizacion(post_id)
+    if (!post.guion) throw new ErrorMcp('Ese post todavía no tiene guion: no hay nada que aprobar.')
+    const ficha = (p) => ({ id: p.id, titulo: p.titulo, aprobacion: p.aprobacion_estado || null, aprobacion_en: p.aprobacion_en || null, aprobacion_comentario: p.aprobacion_comentario || null })
+    // Si ya está como se pide no se toca (quitar no borra los cambios que pidió el cliente)
+    if (aprobado === (post.aprobacion_estado === 'aprobado')) return { ok: true, sin_cambios: true, cliente: cliente.nombre, post: ficha(post) }
+    const cambios = { aprobacion_estado: aprobado ? 'aprobado' : null, aprobacion_en: aprobado ? new Date().toISOString() : null }
     const { error } = await supabaseAdmin.from('calendario_posts').update(cambios).eq('id', post.id)
     comprobar(error, 'el post')
-    const editado = { ...post, ...cambios }
-    // Lo mismo que devuelve ver_guion
+    // Como en la web, si falla la tarjeta la aprobación se queda hecha
+    let tarea
+    try {
+      tarea = aprobado ? await tareasPorGrabar.crear({ clienteId: cliente.id, post }) : await tareasPorGrabar.quitar(post)
+    } catch (err) {
+      console.error('[mcp] aprobar_guion, tarjeta del tablero:', err.message)
+      tarea = { aviso: 'La aprobación se ha guardado, pero no se ha podido actualizar la tarjeta del tablero.' }
+    }
+    return { ok: true, cliente: cliente.nombre, post: ficha({ ...post, ...cambios }), tarea }
+  }))
+
+  servidor.registerTool('crear_enlace_aprobacion', {
+    title: 'Crear enlace de aprobación',
+    description: 'Da la URL que se manda al cliente para que apruebe, sin cuenta, los guiones de un mes o pida cambios. Hay un enlace por cliente y mes: si ya hay uno activo devuelve ese; si no, crea uno que caduca a los 30 días. Si luego se añaden guiones al mes, el cliente los ve en el mismo enlace. Quien tenga la URL ve los guiones del mes: dásela solo al usuario.',
+    inputSchema: {
+      cliente_id: idSchema('id del cliente'),
+      mes: mesSchema.describe('Mes en formato YYYY-MM'),
+    },
+  }, herramienta('crear_enlace_aprobacion', async ({ cliente_id, mes }) => {
+    const cliente = await clienteDeOrganizacion(cliente_id, 'id, nombre')
+    const [anio, numeroMes] = mes.split('-').map(Number)
+    const { desde, hasta } = rangoMes(mes)
+    const { data: guiones, error: errorGuiones } = await supabaseAdmin.from('calendario_posts').select('id')
+      .eq('cliente_id', cliente.id).gte('fecha', desde).lt('fecha', hasta).not('guion', 'is', null)
+    comprobar(errorGuiones, 'los guiones')
+    if (!guiones?.length) throw new ErrorMcp(`${cliente.nombre} no tiene guiones en ${mes}: no hay nada que enviar a aprobar.`)
+
+    const { data: enlaces, error: errorEnlaces } = await supabaseAdmin.from('guion_aprobaciones').select('*')
+      .eq('cliente_id', cliente.id).eq('anio', anio).eq('mes', numeroMes).eq('estado', 'activo')
+      .order('created_at', { ascending: false })
+    comprobar(errorEnlaces, 'los enlaces de aprobación')
+    let enlace = (enlaces || []).find(e => !e.expira_en || new Date(e.expira_en) >= new Date())
+    const reutilizado = Boolean(enlace)
+    if (!enlace) {
+      const { data, error } = await supabaseAdmin.from('guion_aprobaciones')
+        .insert({ user_id: userId, organizacion_id: organizacionId, cliente_id: cliente.id, anio, mes: numeroMes })
+        .select('*').single()
+      comprobar(error, 'el enlace de aprobación')
+      enlace = data
+    }
+    return { ok: true, cliente: cliente.nombre, mes, url: `${urlFrontend}/aprobar/${enlace.token}`, expira_en: enlace.expira_en, guiones: guiones.length, reutilizado }
+  }))
+
+  servidor.registerTool('marcar_grabado', {
+    title: 'Marcar como grabado',
+    description: 'Marca o desmarca un post como grabado, igual que la hoja de rodaje.',
+    inputSchema: {
+      post_id: idSchema('id del post'),
+      grabado: z.boolean().describe('true lo marca como grabado; false lo desmarca'),
+    },
+  }, herramienta('marcar_grabado', async ({ post_id, grabado }) => {
+    const { post, cliente } = await postDeOrganizacion(post_id)
+    const grabado_en = grabado ? new Date().toISOString() : null
+    const { error } = await supabaseAdmin.from('calendario_posts').update({ grabado_en }).eq('id', post.id)
+    comprobar(error, 'el post')
+    return { ok: true, cliente: cliente.nombre, post: { id: post.id, titulo: post.titulo, grabado, grabado_en } }
+  }))
+
+  servidor.registerTool('editar_post', {
+    title: 'Editar post',
+    description: 'Cambia el título, el formato o la red de un post (para el guion, editar_guion; para la fecha, mover_post). Solo cambia los campos que mandes. No se puede en lo publicado o que se está publicando. Si está programado, se puede cambiar el título, pero para cambiar el formato o quitar la red en la que está programado hay que cancelar antes con cancelar_publicacion. Cambiar entre vídeo y carrusel no reescribe el guion.',
+    inputSchema: {
+      post_id: idSchema('id del post'),
+      titulo: z.string().trim().min(1).max(120).optional().describe('Título del post'),
+      formato: formatoPostSchema.optional().describe('video (reel), carrusel o historia'),
+      red: z.enum(Object.keys(REDES_POST)).optional().describe('Dónde se publica: instagram, tiktok o instagram_y_tiktok'),
+    },
+  }, herramienta('editar_post', async ({ post_id, titulo, formato, red }) => {
+    if (titulo === undefined && formato === undefined && red === undefined) throw new ErrorMcp('No hay nada que cambiar: manda al menos uno de titulo, formato o red.')
+    const { post, cliente } = await postDeOrganizacion(post_id)
+    if (post.estado === 'publicado') throw new ErrorMcp('Este post ya está publicado: no se puede editar.')
+    const { pub, pubTikTok } = await exigirSinPublicar(post)
+
+    const programadas = [[pub, 'instagram', 'Instagram'], [pubTikTok, 'tiktok', 'TikTok']].filter(([p]) => p?.estado === 'programado')
+    const cambiaFormato = formato !== undefined && formato !== post.formato
+    if (cambiaFormato && programadas.length) {
+      throw new ErrorMcp(`Este post está programado en ${programadas[0][2]}: cancela antes con cancelar_publicacion para cambiar el formato.`)
+    }
+    const destino = red !== undefined ? REDES_POST[red] : null
+    if (destino) {
+      const quitada = programadas.find(([, nombre]) => !esDeRed(destino, nombre))
+      if (quitada) throw new ErrorMcp(`Este post está programado en ${quitada[2]}: cancela antes con cancelar_publicacion para quitarlo de esa red.`)
+    }
+
+    const cambios = {
+      ...(titulo !== undefined ? { titulo } : {}),
+      ...(formato !== undefined ? { formato } : {}),
+      ...(destino ? { red: destino.red, comparte_en: destino.comparte_en } : {}),
+    }
+    const { data: editado, error } = await supabaseAdmin.from('calendario_posts').update(cambios).eq('id', post.id).select('*').single()
+    comprobar(error, 'el post')
+
+    // Como Guiones del mes: la idea de origen sigue en el mismo formato
+    if (cambiaFormato && post.origen_idea_id && ['video', 'carrusel'].includes(formato)) {
+      const { error: errorIdea } = await supabaseAdmin.from('ideas').update({ formato }).eq('id', post.origen_idea_id).eq('cliente_id', cliente.id)
+      if (errorIdea) console.error('[mcp] editar_post, formato de la idea:', errorIdea.message)
+    }
     return {
+      ok: true,
       cliente: cliente.nombre,
-      id: editado.id,
-      titulo: editado.titulo,
-      fecha: editado.en_calendario === false ? null : editado.fecha,
-      hora: editado.hora ? String(editado.hora).slice(0, 5) : null,
-      red: editado.red,
-      formato: editado.formato,
-      concepto: editado.concepto,
-      objetivo: editado.objetivo,
-      guion: editado.guion,
-      copy: editado.copy,
-      hashtags: editado.hashtags,
-      notas: editado.notas,
-      aprobacion: editado.aprobacion_estado || null,
+      post: { id: editado.id, titulo: editado.titulo, formato: editado.formato, red: editado.red, comparte_en: editado.comparte_en },
+      ...(cambiaFormato && post.guion ? { aviso: 'El guion sigue escrito para el formato anterior: revísalo con ver_guion y editar_guion.' } : {}),
     }
   }))
 
@@ -537,6 +683,18 @@ export function crearServidorMcp(dependencias, { organizacionId, userId }) {
     return archivos
   }
 
+  // Guion de una idea del cliente: el de la propia idea o, si no tiene, el del
+  // último post que salió de ella (ahí viven desde 0030, como en listar_ideas)
+  async function guionDeIdea(clienteId, ideaId) {
+    const { data: idea, error } = await supabaseAdmin.from('ideas').select('*').eq('id', ideaId).eq('cliente_id', clienteId).maybeSingle()
+    comprobar(error, 'la idea')
+    if (!idea) throw new ErrorMcp('No hay ninguna idea con ese id en ese cliente. Usa listar_ideas para ver los ids.')
+    const { data: posts, error: errorPosts } = await supabaseAdmin.from('calendario_posts').select('id, guion')
+      .eq('cliente_id', clienteId).eq('origen_idea_id', ideaId).not('guion', 'is', null).order('creado_en', { ascending: false }).limit(1)
+    comprobar(errorPosts, 'los guiones')
+    return { guion: idea.guion || posts?.[0]?.guion || null, postExistente: posts?.[0]?.id || null }
+  }
+
   servidor.registerTool('crear_idea', {
     title: 'Crear idea',
     description: 'Guarda una idea nueva para un cliente (sale en su Lluvia de ideas). Opcionalmente, ligada a un mes.',
@@ -558,7 +716,7 @@ export function crearServidorMcp(dependencias, { organizacionId, userId }) {
 
   servidor.registerTool('crear_post', {
     title: 'Crear post',
-    description: 'Crea un post en el calendario de un cliente, igual que «Nuevo post» en la web: en Instagram (por defecto), en TikTok o en los dos. Opcionalmente con su guion.',
+    description: 'Crea un post en el calendario de un cliente, igual que «Nuevo post» en la web: en Instagram (por defecto), en TikTok o en los dos. Opcionalmente con su guion, o desde una idea guardada (idea_id): el post queda ligado a la idea y copia su guion, salvo que mandes guion.',
     inputSchema: {
       cliente_id: idSchema('id del cliente'),
       fecha: fechaSchema,
@@ -567,9 +725,12 @@ export function crearServidorMcp(dependencias, { organizacionId, userId }) {
       titulo: z.string().trim().min(1).max(120).describe('Título del post'),
       red: z.enum(Object.keys(REDES_POST)).default('instagram').describe('Dónde se publica: instagram, tiktok o instagram_y_tiktok (por defecto, instagram)'),
       guion: guionSchema.optional().describe('Guion: texto (una frase por línea) u objeto de Aify { gancho, contenido: { frases }, cierre: { remate, cta } }'),
+      idea_id: idSchema('id de una idea de este cliente (de listar_ideas)').optional().describe('Opcional: idea de este cliente (de listar_ideas) de la que sale el post'),
     },
-  }, herramienta('crear_post', async ({ cliente_id, fecha, hora, formato, titulo, red, guion }) => {
+  }, herramienta('crear_post', async ({ cliente_id, fecha, hora, formato, titulo, red, guion, idea_id }) => {
     const cliente = await clienteDeOrganizacion(cliente_id, 'id, nombre')
+    const origen = idea_id ? await guionDeIdea(cliente.id, idea_id) : null
+    const guionFinal = guion ? guionParaDB(guion) : origen?.guion ?? null
     const destino = REDES_POST[red] || REDES_POST.instagram
     const fila = {
       user_id: userId,
@@ -580,12 +741,20 @@ export function crearServidorMcp(dependencias, { organizacionId, userId }) {
       comparte_en: destino.comparte_en,
       formato,
       titulo,
-      guion: guion ? guionParaDB(guion) : null,
+      guion: guionFinal,
       estado: 'borrador',
+      ...(idea_id ? { origen_idea_id: idea_id } : {}),
+      // Con el guion de la idea, el post ya está desarrollado (como en la web)
+      ...(!guion && origen?.guion ? { desarrollado: true } : {}),
     }
-    const { data, error } = await supabaseAdmin.from('calendario_posts').insert(fila).select('id, fecha, hora, titulo, formato, red, comparte_en').single()
+    const { data, error } = await supabaseAdmin.from('calendario_posts').insert(fila).select('id, fecha, hora, titulo, formato, red, comparte_en, origen_idea_id').single()
     comprobar(error, 'el post nuevo')
-    return { ok: true, cliente: cliente.nombre, post: { ...data, hora: data.hora ? String(data.hora).slice(0, 5) : null } }
+    return {
+      ok: true,
+      cliente: cliente.nombre,
+      post: { ...data, hora: data.hora ? String(data.hora).slice(0, 5) : null, tiene_guion: Boolean(guionFinal) },
+      ...(origen?.postExistente ? { aviso: `Esta idea ya tenía el post ${origen.postExistente} con su guion. Si querías darle fecha a ese, usa mover_post en vez de crear otro.` } : {}),
+    }
   }))
 
   servidor.registerTool('mover_post', {
@@ -837,6 +1006,50 @@ export function crearServidorMcp(dependencias, { organizacionId, userId }) {
       cuenta: creador.usuario ? `@${creador.usuario}` : creador.nombre,
       publicacion: { post_id: pub.post_id, tipo: pub.tipo, estado: pub.estado, privacidad: pub.privacidad, publicar_en: pub.publicar_en, archivos: pub.archivos.length, consentimiento_en: pub.consentimiento_en },
       nota: 'A su hora, Aify la manda a TikTok; puede tardar unos minutos en aparecer.',
+    }
+  }))
+
+  servidor.registerTool('cancelar_publicacion', {
+    title: 'Cancelar publicación',
+    description: 'Cancela lo programado de un post en una red, igual que «Cancelar» en la web: ya no se publicará. No borra el post ni sus archivos. Solo se puede con lo programado o con error; lo que se está publicando o ya ha salido no se cancela. Para volver a programarlo, ver_publicacion da lo que hace falta.',
+    inputSchema: {
+      post_id: idSchema('id del post'),
+      red: z.enum(['instagram', 'tiktok']).describe('Red en la que se cancela'),
+    },
+  }, herramienta('cancelar_publicacion', async ({ post_id, red }) => {
+    const { post, cliente } = await postDeOrganizacion(post_id)
+    const resultado = await cancelarPublicacion({ red, clienteId: cliente.id, postId: post.id })
+    if (resultado.error) throw new ErrorMcp(resultado.error)
+    return { ok: true, cliente: cliente.nombre, red, publicacion: { post_id: post.id, estado: resultado.publicacion.estado, publicar_en: resultado.publicacion.publicar_en } }
+  }))
+
+  servidor.registerTool('ver_publicacion', {
+    title: 'Ver publicación',
+    description: 'Lo programado de un post en Instagram y en TikTok: estado, hora, caption, rutas de los archivos, portada y Trial Reel (y las opciones de TikTok). Sirve para reprogramar con programar_publicacion o programar_tiktok usando las mismas rutas. Si archivos_borrados es true, hay que volver a subirlos con pedir_subida.',
+    inputSchema: { post_id: idSchema('id del post') },
+    annotations: { readOnlyHint: true },
+  }, herramienta('ver_publicacion', async ({ post_id }) => {
+    const { post, cliente } = await postDeOrganizacion(post_id)
+    const [pub, pubTikTok] = await Promise.all([publicacionDelPost(post.id), publicacionTikTokDelPost(post.id)])
+    const rutas = (p) => (Array.isArray(p.archivos) ? p.archivos.map(a => a.ruta) : [])
+    return {
+      cliente: cliente.nombre,
+      post: { id: post.id, titulo: post.titulo, red: post.red, comparte_en: post.comparte_en, formato: post.formato },
+      instagram: pub ? {
+        estado: pub.estado, tipo: pub.tipo, publicar_en: pub.publicar_en, publicado_en: pub.publicado_en, enlace: pub.permalink, error: pub.error,
+        caption: pub.caption, compartir_en_feed: pub.compartir_en_feed, rutas: rutas(pub), archivos: pub.archivos,
+        portada_ruta: pub.portada_ruta, portada_nombre: pub.contenedores?.portada_nombre || null,
+        es_trial: Boolean(pub.es_trial), trial_graduacion: pub.es_trial ? pub.trial_graduacion || 'MANUAL' : null,
+        archivos_borrados: Boolean(pub.contenedores?.archivos_borrados),
+      } : null,
+      tiktok: pubTikTok ? {
+        estado: pubTikTok.estado, estado_tiktok: pubTikTok.estado_tiktok, tipo: pubTikTok.tipo, publicar_en: pubTikTok.publicar_en, publicado_en: pubTikTok.publicado_en, enlace: pubTikTok.enlace, error: pubTikTok.error,
+        titulo: pubTikTok.titulo, descripcion: pubTikTok.descripcion, rutas: rutas(pubTikTok), archivos: pubTikTok.archivos, privacidad: pubTikTok.privacidad,
+        permitir_comentarios: pubTikTok.permitir_comentarios, permitir_duo: pubTikTok.permitir_duo, permitir_stitch: pubTikTok.permitir_stitch,
+        contenido_comercial: pubTikTok.contenido_comercial, marca_propia: pubTikTok.marca_propia, contenido_de_marca: pubTikTok.contenido_de_marca,
+        es_ia: pubTikTok.es_ia, musica_auto: pubTikTok.musica_auto, archivos_borrados: Boolean(pubTikTok.archivos_borrados),
+      } : null,
+      ...(pub || pubTikTok ? {} : { nota: 'Este post no tiene nada programado desde Aify.' }),
     }
   }))
 
