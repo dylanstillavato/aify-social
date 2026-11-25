@@ -2321,7 +2321,10 @@ function normalizarTexto(texto) {
   return String(texto || '')
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    // Los emojis cuentan como palabra (p. ej. «Comenta 🧢»): cada uno se separa
+    // con espacios para que «🧢🧢» o «hola🧢» también coincidan con «🧢».
+    .replace(/(\p{Extended_Pictographic})/gu, ' $1 ')
+    .replace(/[^\p{L}\p{N}\p{Extended_Pictographic}]+/gu, ' ')
     .trim()
 }
 
